@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowUpRight, Banknote, CalendarClock, CircleDollarSign, Landmark, ReceiptText, WalletCards } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { redirect } from "next/navigation";
 import { calculateDashboardBalances } from "@/lib/dashboard-calculations";
 import { db } from "@/lib/db";
 import { journalDescriptionLabel } from "@/lib/journal-labels";
@@ -12,6 +13,7 @@ const money = (value: number) => `B$${value.toLocaleString("en-US", { minimumFra
 
 export default async function Home() {
   const user = await requireStaff(); const { tenants, active } = await getAuthorizedTenant(user);
+  if (!active && ["SYSTEM_ADMIN", "FIRM_ADMIN"].includes(user.staffRole ?? "")) redirect("/settings/companies/new");
   if (!active) return <main className="empty-state"><h1>No assigned clients</h1><p>Ask a firm administrator to assign a client to your account.</p><form action={logout}><button className="button-secondary">Sign out</button></form></main>;
   const [journals, ledgerLines, openPeriod] = await Promise.all([db.journal.findMany({ where: { tenantId: active.id, status: { in: ["POSTED","REVERSED"] } }, include: { lines: { include: { account: true } } }, orderBy: { createdAt: "desc" }, take: 8 }), db.journalLine.findMany({ where: { journal: { tenantId: active.id, status: { in: ["POSTED", "REVERSED"] } } }, include: { account: true } }), db.accountingPeriod.findFirst({ where: { tenantId: active.id, status: "OPEN" }, orderBy: { startsOn: "desc" } })]);
   for (const journal of journals) journal.description = journalDescriptionLabel(journal.source, journal.description);

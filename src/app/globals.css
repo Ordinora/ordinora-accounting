@@ -46,3 +46,11 @@
 .status-badge.selected,.status-badge.approved,.status-badge.received,.status-badge.partially_received,.status-badge.partially_billed,.status-badge.billed{background:#e6f4ed;color:var(--success)}
 .data-table input[name="receiveQuantity"]{display:block;width:120px;min-width:120px;height:42px;padding:0 12px;border:1px solid #9fb6aa;border-radius:8px;background:#fff;color:var(--deep);font-size:13px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}.data-table input[name="receiveQuantity"]:hover{border-color:var(--copper)}.data-table input[name="receiveQuantity"]:focus{outline:3px solid rgba(198,124,58,.18);border-color:var(--copper)}
 .source-link-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:250px}.source-link-actions form{margin:0}.source-link-actions .button-secondary{white-space:nowrap}
+.first-company-page {
+  width: min(1100px, calc(100% - 48px));
+  margin: 48px auto;
+}
+
+.first-company-page .form-actions .button-secondary {
+  display: none;
+}
