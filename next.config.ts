@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Netlify's OpenNext adapter owns the deployment output. Keep standalone
+  // output for Docker and other self-hosted production builds only.
+  output: process.env.NETLIFY ? undefined : "standalone",
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   async headers() {
     return [{
