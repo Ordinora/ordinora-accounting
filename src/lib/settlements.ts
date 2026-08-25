@@ -1,0 +1,53 @@
+import "server-only";
+import { JournalSource, Prisma, StaffRole } from "@prisma/client";
+import { parseMoneyToMinor } from "./accounting";
+import { calculateSettlementValues, realizedFxPosting } from "./currency";
+import { isOpeningControlAccount } from "./opening-control";
+import { runSerializableTransaction } from "./serializable-transaction";
+
+type Actor={tenantId:string;userId:string;firmId:string;role:StaffRole|null};
+type AllocationInput={documentId:string;amount:string};
+type SettlementInput={kind:"RECEIPT"|"PAYMENT";actor:Actor;partyId:string;bankAccountId:string;reference:string;settlementDate:Date;allocations:AllocationInput[]};
+const zero=new Prisma.Decimal(0);
+
+function authorize(actor:Actor){if(!actor.role||!["SYSTEM_ADMIN","FIRM_ADMIN","ACCOUNTANT"].includes(actor.role))throw new Error("Your role cannot post settlements.");}
+function money(value:string){return new Prisma.Decimal(parseMoneyToMinor(value).toString()).div(100);}
+
+export async function postSettlement(input:SettlementInput){
+  authorize(input.actor);
+  if(input.allocations.length<1||input.allocations.length>50)throw new Error("Select between 1 and 50 documents to settle.");
+  const ids=input.allocations.map(a=>a.documentId);if(new Set(ids).size!==ids.length)throw new Error("A document can only be allocated once per settlement.");
+  const requested=input.allocations.map(a=>({documentId:a.documentId,amount:money(a.amount)}));if(requested.some(a=>a.amount.lte(0)))throw new Error("Allocation amounts must be positive.");
+  return runSerializableTransaction(async tx=>{
+    const tenant=await tx.tenant.findUniqueOrThrow({where:{id:input.actor.tenantId}});
+    const period=await tx.accountingPeriod.findFirst({where:{tenantId:tenant.id,status:"OPEN",startsOn:{lte:input.settlementDate},endsOn:{gte:input.settlementDate}},orderBy:{startsOn:"desc"}});if(!period)throw new Error("The settlement date is not inside an open accounting period. Open that month under Administration → Accounting periods, or choose another date.");
+    const bank=await tx.account.findFirst({where:{id:input.bankAccountId,tenantId:tenant.id,isActive:true,type:"ASSET"}});if(!bank)throw new Error("Select an active cash or bank asset account.");
+    const fx=await tx.account.findFirst({where:{tenantId:tenant.id,code:"4310",isActive:true}});if(!fx)throw new Error("Foreign exchange gains (losses) account 4310 is missing.");
+    const control=await tx.account.findFirst({where:{tenantId:tenant.id,code:input.kind==="RECEIPT"?"1200":"2000",isActive:true}});if(!control)throw new Error("The required receivable or payable control account is missing.");
+    const documents=input.kind==="RECEIPT"?await tx.salesInvoice.findMany({where:{id:{in:ids},tenantId:tenant.id,customerId:input.partyId,status:{in:["POSTED","PARTIALLY_PAID","OVERDUE"]}},include:{allocations:true,creditNotes:true}}):await tx.supplierBill.findMany({where:{id:{in:ids},tenantId:tenant.id,supplierId:input.partyId,status:{in:["POSTED","PARTIALLY_PAID","OVERDUE"]}},include:{allocations:true,creditNotes:true}});
+    if(documents.length!==ids.length)throw new Error("Every selected document must be open and belong to the selected party.");
+    let openingPaymentControl=control;
+    if(input.kind==="PAYMENT"&&documents.some(document=>document.isOpeningBalance)){
+      const opening=await tx.journal.findFirst({where:{tenantId:tenant.id,source:"OPENING_BALANCE",status:"POSTED"},include:{lines:{include:{account:true}}},orderBy:{accountingDate:"desc"}});
+      const openingLine=opening?.lines.find(line=>isOpeningControlAccount(line,"PAYABLE")&&line.credit.gt(line.debit));
+      if(!openingLine)throw new Error("The opening trade-payables control account could not be identified.");
+      openingPaymentControl=openingLine.account;
+    }
+    const currency=documents[0].currency;if(documents.some(d=>d.currency!==currency))throw new Error("One settlement cannot allocate documents in different currencies.");
+    const party=input.kind==="RECEIPT"?await tx.customer.findFirst({where:{id:input.partyId,tenantId:tenant.id,isActive:true}}):await tx.supplier.findFirst({where:{id:input.partyId,tenantId:tenant.id,isActive:true}});if(!party||party.currencyCode!==currency)throw new Error("Party currency does not match the selected documents.");
+    let settlementRate=new Prisma.Decimal(1);if(currency!==tenant.defaultCurrency){const rate=await tx.exchangeRate.findFirst({where:{tenantId:tenant.id,currencyCode:currency,effectiveOn:{lte:input.settlementDate}},orderBy:{effectiveOn:"desc"}});if(!rate)throw new Error(`No ${currency} exchange rate exists on or before the settlement date.`);settlementRate=rate.rateToBase;}
+    const calculated=requested.map(item=>{const document=documents.find(d=>d.id===item.documentId)!;const previously=document.allocations.reduce((sum,a)=>sum.add(a.foreignAmount),zero);const credited=document.creditNotes.reduce((sum,c)=>sum.add(c.foreignTotal),zero);const outstanding=document.foreignTotal.sub(previously).sub(credited);if(item.amount.gt(outstanding))throw new Error(`Allocation exceeds the outstanding amount on ${document.reference}.`);const values=calculateSettlementValues(item.amount,document.exchangeRate,settlementRate);return{...item,document,carrying:values.carryingBase,settled:values.settlementBase,fx:values.difference,outstandingAfter:outstanding.sub(item.amount)};});
+    const foreignAmount=calculated.reduce((s,a)=>s.add(a.amount),zero);const baseAmount=calculated.reduce((s,a)=>s.add(a.settled),zero);const realizedFxBase=calculated.reduce((s,a)=>s.add(a.fx),zero);
+    const common={tenantId:tenant.id,periodId:period.id,bankAccountId:bank.id,reference:input.reference,currency,exchangeRate:settlementRate,foreignAmount,baseAmount,realizedFxBase,createdById:input.actor.userId};
+    const settlement=input.kind==="RECEIPT"?await tx.customerReceipt.create({data:{...common,customerId:input.partyId,receiptDate:input.settlementDate,allocations:{create:calculated.map(a=>({invoiceId:a.documentId,foreignAmount:a.amount,carryingBaseAmount:a.carrying,settlementBaseAmount:a.settled,realizedFxBase:a.fx}))}}}):await tx.supplierPayment.create({data:{...common,supplierId:input.partyId,paymentDate:input.settlementDate,allocations:{create:calculated.map(a=>({billId:a.documentId,foreignAmount:a.amount,carryingBaseAmount:a.carrying,settlementBaseAmount:a.settled,realizedFxBase:a.fx}))}}});
+    for(const a of calculated){const status=a.outstandingAfter.eq(0)?"PAID":"PARTIALLY_PAID";if(input.kind==="RECEIPT")await tx.salesInvoice.update({where:{id:a.documentId},data:{status}});else await tx.supplierBill.update({where:{id:a.documentId},data:{status}});}
+    const lines:{accountId:string;debit:Prisma.Decimal;credit:Prisma.Decimal;description:string;currencyCode:string;exchangeRate:Prisma.Decimal;foreignDebit:Prisma.Decimal;foreignCredit:Prisma.Decimal}[]=[];
+    if(input.kind==="RECEIPT"){lines.push({accountId:bank.id,debit:baseAmount,credit:zero,description:`Receipt ${input.reference}`,currencyCode:currency,exchangeRate:settlementRate,foreignDebit:foreignAmount,foreignCredit:zero});for(const a of calculated)lines.push({accountId:control.id,debit:zero,credit:a.carrying,description:`Allocation to ${a.document.reference}`,currencyCode:currency,exchangeRate:a.document.exchangeRate,foreignDebit:zero,foreignCredit:a.amount});}
+    else{for(const a of calculated)lines.push({accountId:a.document.isOpeningBalance?openingPaymentControl.id:control.id,debit:a.carrying,credit:zero,description:`Allocation to ${a.document.reference}`,currencyCode:currency,exchangeRate:a.document.exchangeRate,foreignDebit:a.amount,foreignCredit:zero});lines.push({accountId:bank.id,debit:zero,credit:baseAmount,description:`Payment ${input.reference}`,currencyCode:currency,exchangeRate:settlementRate,foreignDebit:zero,foreignCredit:foreignAmount});}
+    if(!realizedFxBase.eq(0)){const posting=realizedFxPosting(input.kind,realizedFxBase);lines.push({accountId:fx.id,debit:posting.debit,credit:posting.credit,description:"Realized foreign exchange difference",currencyCode:tenant.defaultCurrency,exchangeRate:new Prisma.Decimal(1),foreignDebit:posting.debit,foreignCredit:posting.credit});}
+    const source:JournalSource=input.kind==="RECEIPT"?"CUSTOMER_RECEIPT":"SUPPLIER_PAYMENT";const journal=await tx.journal.create({data:{tenantId:tenant.id,periodId:period.id,reference:input.reference,description:input.kind==="RECEIPT"?"Customer receipt":"Supplier payment",accountingDate:input.settlementDate,status:"POSTED",source,sourceId:settlement.id,createdById:input.actor.userId,approvedById:input.actor.userId,postedById:input.actor.userId,postedAt:new Date(),lines:{create:lines}}});
+    if(input.kind==="RECEIPT")await tx.customerReceipt.update({where:{id:settlement.id},data:{journalId:journal.id}});else await tx.supplierPayment.update({where:{id:settlement.id},data:{journalId:journal.id}});
+    await tx.auditEvent.create({data:{firmId:input.actor.firmId,tenantId:tenant.id,actorId:input.actor.userId,actorKind:"STAFF",action:input.kind==="RECEIPT"?"CUSTOMER_RECEIPT_POSTED":"SUPPLIER_PAYMENT_POSTED",entityType:input.kind==="RECEIPT"?"CustomerReceipt":"SupplierPayment",entityId:settlement.id,newValues:{reference:input.reference,currency,foreignAmount:foreignAmount.toString(),baseAmount:baseAmount.toString(),realizedFxBase:realizedFxBase.toString(),allocationCount:calculated.length,journalId:journal.id}}});
+    return settlement;
+  });
+}

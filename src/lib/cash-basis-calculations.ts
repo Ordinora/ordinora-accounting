@@ -1,0 +1,2 @@
+export type ExpenseAllocation = { settlementBaseAmount: number; billForeignTotal: number; expenseForeignTotal: number };
+export function allocatedCashExpense(rows: ExpenseAllocation[]) { return rows.reduce((sum, row) => { if (row.billForeignTotal <= 0) return sum; const ratio = Math.min(1, Math.max(0, row.expenseForeignTotal / row.billForeignTotal)); return sum + row.settlementBaseAmount * ratio; }, 0); }

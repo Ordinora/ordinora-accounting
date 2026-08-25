@@ -1,0 +1,1 @@
+import { ContactEditPage } from "@/components/contact-edit-page";export const dynamic="force-dynamic";export default async function Page({params}:{params:Promise<{id:string}>}){return <ContactEditPage kind="customer" id={(await params).id}/>}

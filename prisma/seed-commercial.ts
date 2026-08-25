@@ -1,0 +1,4 @@
+import { PrismaClient } from "@prisma/client";
+const prisma=new PrismaClient();
+async function main(){const tenants=await prisma.tenant.findMany({orderBy:{createdAt:"asc"}});for(let i=0;i<tenants.length;i++){const tenant=tenants[i];await prisma.customer.upsert({where:{tenantId_code:{tenantId:tenant.id,code:`CUS-${i+1}01`}},update:{},create:{tenantId:tenant.id,code:`CUS-${i+1}01`,name:`Fictional Customer ${i+1}`,email:`customer${i+1}@demo.invalid`,paymentTermsDays:30}});await prisma.supplier.upsert({where:{tenantId_code:{tenantId:tenant.id,code:`SUP-${i+1}01`}},update:{},create:{tenantId:tenant.id,code:`SUP-${i+1}01`,name:`Fictional Supplier ${i+1}`,email:`supplier${i+1}@demo.invalid`,paymentTermsDays:30}})}console.log(`Added fictional customer and supplier records for ${tenants.length} clients.`)}
+main().finally(()=>prisma.$disconnect());

@@ -1,0 +1,3 @@
+import { describe, expect, it } from "vitest";
+import { monthlyAccountingPeriods } from "./company-setup";
+describe("company onboarding", () => { it("creates all monthly periods including leap-year February", () => { const periods = monthlyAccountingPeriods(2024); expect(periods).toHaveLength(12); expect(periods[1].name).toBe("February 2024"); expect(periods[1].endsOn.toISOString().slice(0, 10)).toBe("2024-02-29"); }); it("creates March and April periods for transaction testing", () => { const periods = monthlyAccountingPeriods(2026); expect(periods[2].name).toBe("March 2026"); expect(periods[3].name).toBe("April 2026"); }); });

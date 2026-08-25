@@ -1,0 +1,25 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ArrowLeft, CheckCircle2, Pencil, Stamp, Undo2 } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { DeleteJournalForm } from "@/components/delete-journal-form";
+import { db } from "@/lib/db";
+import { journalDescriptionLabel } from "@/lib/journal-labels";
+import { requireActiveTenant } from "@/lib/session";
+import { approveJournal, postJournal, reversePostedJournal } from "../actions";
+export const dynamic = "force-dynamic";
+export default async function JournalPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params, { user, tenants, active } = await requireActiveTenant();
+  const journal = await db.journal.findFirst({ where: { id, tenantId: active.id }, include: { lines: { include: { account: true } }, period: true, creator: true, reversal: true } });
+  if (!journal) notFound();
+  journal.description = journalDescriptionLabel(journal.source, journal.description);
+  const canReview = ["SYSTEM_ADMIN", "FIRM_ADMIN", "REVIEWER"].includes(user.staffRole ?? ""), canPost = ["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole ?? ""), canDelete = canPost && journal.period.status === "OPEN";
+  return <AppShell user={{ displayName: user.displayName, email: user.email, role: user.staffRole?.replaceAll("_", " ") ?? "STAFF", firmName: user.firm.name }} tenants={tenants} activeTenant={active} pageTitle={`Journal ${journal.reference}`} pageDescription="Posting detail, audit attribution and correction controls"><main className="module-page">
+    <div className="detail-toolbar"><Link href="/journals" className="back-link"><ArrowLeft size={15} />Back to journal entries</Link><span className={`status-badge large ${journal.status.toLowerCase()}`}>{journal.status.replaceAll("_", " ")}</span></div>
+    <section className="summary-grid"><div><small>Accounting date</small><strong>{journal.accountingDate.toLocaleDateString("en-BN")}</strong></div><div><small>Financial period</small><strong>{journal.period.name}</strong></div><div><small>Created by</small><strong>{journal.creator.displayName}</strong></div><div><small>Posted at</small><strong>{journal.postedAt?.toLocaleString("en-BN") ?? "Not posted"}</strong></div></section>
+    <section className="surface-card"><div className="card-header"><div><h3>{journal.description}</h3><p>Double-entry posting lines</p></div></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Account</th><th>Description</th><th className="numeric">Debit (BND)</th><th className="numeric">Credit (BND)</th></tr></thead><tbody>{journal.lines.map(line => <tr key={line.id}><td><strong>{line.account.code}</strong> · {line.account.name}</td><td>{line.description}</td><td className="numeric money">{Number(line.debit) > 0 ? `B$${Number(line.debit).toFixed(2)}` : "—"}</td><td className="numeric money">{Number(line.credit) > 0 ? `B$${Number(line.credit).toFixed(2)}` : "—"}</td></tr>)}</tbody><tfoot><tr><td colSpan={2}>Totals</td><td className="numeric">B${journal.lines.reduce((s, l) => s + Number(l.debit), 0).toFixed(2)}</td><td className="numeric">B${journal.lines.reduce((s, l) => s + Number(l.credit), 0).toFixed(2)}</td></tr></tfoot></table></div></section>
+    <section className="workflow-card"><div><h3>Posting controls</h3><p>Choose edit for a connected update, reversal when audit history must remain, or permanent deletion for an erroneous transaction.</p></div><div className="workflow-actions">{journal.source === "MANUAL" && canDelete && journal.status !== "REVERSED" && <Link href={`/journals/${journal.id}/edit`} className="button-secondary"><Pencil size={15} />Edit transaction</Link>}{journal.status === "DRAFT" && canPost && <form action={postJournal}><input type="hidden" name="journalId" value={journal.id} /><button className="button-important"><Stamp size={15} />Post journal</button></form>}{journal.status === "IN_REVIEW" && canReview && <form action={approveJournal}><input type="hidden" name="journalId" value={journal.id} /><button className="button-primary"><CheckCircle2 size={15} />Approve</button></form>}</div></section>
+    {journal.status === "POSTED" && canPost && !journal.reversal && <form id="reverse-transaction" action={reversePostedJournal} className="reversal-card"><div><span className="status-icon error"><Undo2 size={18} /></span><div><h3>Reverse this posting</h3><p>Create an equal and opposite entry while retaining the audit history.</p></div></div><input type="hidden" name="journalId" value={journal.id} /><label>Reason for reversal<input name="reason" minLength={5} maxLength={240} required placeholder="Explain the correction" /></label><button className="button-danger">Create reversal</button></form>}
+    <div id="delete-transaction">{canDelete ? <DeleteJournalForm journalId={journal.id} reference={journal.reference} /> : <section className="surface-card"><p>Permanent deletion is unavailable because this financial period is not open or your role does not permit deletion.</p></section>}</div>
+  </main></AppShell>;
+}

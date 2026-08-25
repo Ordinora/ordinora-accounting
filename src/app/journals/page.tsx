@@ -1,0 +1,15 @@
+import Link from "next/link";
+import { BookOpen, Plus } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { TransactionActions } from "@/components/transaction-actions";
+import { db } from "@/lib/db";
+import { journalDescriptionLabel } from "@/lib/journal-labels";
+import { requireActiveTenant } from "@/lib/session";
+export const dynamic = "force-dynamic";
+export default async function JournalsPage() {
+  const { user, tenants, active } = await requireActiveTenant();
+  const journals = await db.journal.findMany({ where: { tenantId: active.id }, include: { lines: true, period: { select: { status: true } } }, orderBy: [{ accountingDate: "desc" }, { createdAt: "desc" }] });
+  for (const journal of journals) journal.description = journalDescriptionLabel(journal.source, journal.description);
+  const shellUser = { displayName: user.displayName, email: user.email, role: user.staffRole?.replaceAll("_", " ") ?? "STAFF", firmName: user.firm.name };
+  return <AppShell user={shellUser} tenants={tenants} activeTenant={active} pageTitle="Journal Entries" pageDescription="Create, inspect and correct general-ledger postings"><main className="module-page"><header className="module-header"><div><p className="eyebrow">{active.legalName.toUpperCase()}</p><h2>Journal register</h2><p>Use Actions to view, edit, reverse, or permanently delete a transaction.</p></div><div className="module-actions"><Link href="/accounts" className="button-secondary"><BookOpen size={16} />Chart of accounts</Link><Link href="/journals/new" className="button-primary"><Plus size={16} />New journal</Link></div></header><section className="surface-card table-card"><div className="table-toolbar"><label><span className="sr-only">Search journal entries</span><input placeholder="Search reference or description" /></label><select aria-label="Filter by status"><option>All statuses</option><option>Posted</option><option>Draft</option><option>Reversed</option></select></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Reference</th><th>Date</th><th>Description</th><th className="numeric">Total debit</th><th>Status</th><th>Action</th></tr></thead><tbody>{journals.map(journal => <tr key={journal.id}><td><Link href={`/journals/${journal.id}`} className="record-link">{journal.reference}</Link></td><td>{journal.accountingDate.toLocaleDateString("en-BN")}</td><td>{journal.description}</td><td className="numeric money">B${journal.lines.reduce((sum, line) => sum + Number(line.debit), 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td><td><span className={`status-badge ${journal.status.toLowerCase()}`}>{journal.status.replaceAll("_", " ")}</span></td><td><TransactionActions id={journal.id} source={journal.source} status={journal.status} periodOpen={journal.period.status === "OPEN"} /></td></tr>)}{!journals.length && <tr><td colSpan={6}><div className="table-empty">No journal entries found.</div></td></tr>}</tbody></table></div><footer className="table-footer"><span>{journals.length} records</span><span>Page 1 of 1</span></footer></section></main></AppShell>;
+}

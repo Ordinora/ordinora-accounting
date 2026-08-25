@@ -1,0 +1,10 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { AppShell } from "@/components/app-shell";
+import { PayrollPaymentForm } from "@/components/payroll-payment-form";
+import { db } from "@/lib/db";
+import { requireActiveTenant } from "@/lib/session";
+
+export const dynamic="force-dynamic";
+
+export default async function Page({params}:{params:Promise<{id:string}>}){const{id}=await params,{user,tenants,active}=await requireActiveTenant(),[run,accounts]=await Promise.all([db.payrollRun.findFirst({where:{id,tenantId:active.id,status:{in:["POSTED","LOCKED"]}},include:{entries:true,settlements:true}}),db.account.findMany({where:{tenantId:active.id,isActive:true,type:"ASSET",reportingClassification:"Cash and cash equivalents"},orderBy:{code:"asc"}})]);if(!run)notFound();const net=run.entries.reduce((sum,entry)=>sum+Number(entry.netPay),0),paid=run.settlements.reduce((sum,entry)=>sum+Number(entry.amount),0),outstanding=Math.max(0,net-paid);return <AppShell user={{displayName:user.displayName,email:user.email,role:user.staffRole?.replaceAll("_"," ")??"STAFF",firmName:user.firm.name}} tenants={tenants} activeTenant={active} pageTitle="Payroll Payment" pageDescription={`Settle ${run.reference} from cash or bank`}><main className="module-page form-page"><div className="detail-toolbar"><Link href={`/payroll/runs/${run.id}`} className="back-link">← Payroll run</Link></div><div className="summary-grid"><div><small>Net payroll</small><strong>{active.defaultCurrency} {net.toFixed(2)}</strong></div><div><small>Paid</small><strong>{active.defaultCurrency} {paid.toFixed(2)}</strong></div><div><small>Outstanding</small><strong>{active.defaultCurrency} {outstanding.toFixed(2)}</strong></div><div><small>Status</small><strong>{outstanding===0?"PAID":"OUTSTANDING"}</strong></div></div><PayrollPaymentForm runId={run.id} runReference={run.reference} returnHref={`/payroll/runs/${run.id}`} accounts={accounts} outstanding={outstanding} defaultDate={new Date().toISOString().slice(0,10)}/></main></AppShell>}

@@ -1,0 +1,41 @@
+import "server-only";
+import { JournalSource, Prisma, StaffRole } from "@prisma/client";
+import { db } from "./db";
+import { parseMoneyToMinor } from "./accounting";
+import { convertForeignToBase } from "./currency";
+
+type Actor={tenantId:string;userId:string;firmId:string;role:StaffRole|null};
+type Line={originalLineId:string;description:string;accountId:string;quantity:string;unitPrice:string};
+const zero=new Prisma.Decimal(0);
+function authorize(actor:Actor){if(!actor.role||!["SYSTEM_ADMIN","FIRM_ADMIN","ACCOUNTANT"].includes(actor.role))throw new Error("Your role cannot post credit notes.");}
+
+export async function postCreditNote(input:{kind:"SALE"|"PURCHASE";actor:Actor;documentId:string;reference:string;creditDate:Date;description:string;lines:Line[]}){
+  authorize(input.actor);if(input.lines.length<1||input.lines.length>50)throw new Error("A credit note requires between 1 and 50 lines.");
+  let lines=input.lines.map(line=>{const quantity=new Prisma.Decimal(line.quantity);if(quantity.lte(0)||quantity.decimalPlaces()>4)throw new Error("Quantities must be positive with no more than four decimal places.");const unitPrice=new Prisma.Decimal(parseMoneyToMinor(line.unitPrice).toString()).div(100);const foreign=quantity.mul(unitPrice).toDecimalPlaces(2,Prisma.Decimal.ROUND_HALF_UP);if(foreign.lte(0))throw new Error("Every line total must be positive.");return{...line,quantity,unitPrice,foreign};});
+  let foreignTotal=lines.reduce((sum,line)=>sum.add(line.foreign),zero);
+  return db.$transaction(async tx=>{
+    const period=await tx.accountingPeriod.findFirst({where:{tenantId:input.actor.tenantId,status:"OPEN",startsOn:{lte:input.creditDate},endsOn:{gte:input.creditDate}},orderBy:{startsOn:"desc"}});if(!period)throw new Error("The credit-note date is not inside an open accounting period. Open that month under Administration → Accounting periods, or choose another date.");
+    const document=input.kind==="SALE"
+      ?await tx.salesInvoice.findFirst({where:{id:input.documentId,tenantId:input.actor.tenantId,status:{in:["POSTED","PARTIALLY_PAID","OVERDUE"]}},include:{allocations:true,creditNotes:true,lines:{include:{creditNoteLines:true}}}})
+      :await tx.supplierBill.findFirst({where:{id:input.documentId,tenantId:input.actor.tenantId,status:{in:["POSTED","PARTIALLY_PAID","OVERDUE"]}},include:{allocations:true,creditNotes:true,lines:{include:{creditNoteLines:true}}}});
+    if(!document)throw new Error("The original document is not open or does not belong to this client.");
+    lines=lines.map(line=>{const original=document.lines.find(item=>item.id===line.originalLineId);if(!original)throw new Error("Every credited item must come from the selected original document.");const maximumNetPrice=original.lineTotal.div(original.quantity);const unitPrice=Prisma.Decimal.min(line.unitPrice,maximumNetPrice),foreign=line.quantity.mul(unitPrice).toDecimalPlaces(2,Prisma.Decimal.ROUND_HALF_UP);return{...line,unitPrice,foreign}});foreignTotal=lines.reduce((sum,line)=>sum.add(line.foreign),zero);
+    const allocated=document.allocations.reduce((sum,a)=>sum.add(a.foreignAmount),zero);const credited=document.creditNotes.reduce((sum,c)=>sum.add(c.foreignTotal),zero);const outstanding=document.foreignTotal.sub(allocated).sub(credited);if(foreignTotal.gt(outstanding))throw new Error(`Credit total exceeds the outstanding amount on ${document.reference}.`);
+    for(const line of lines){const original=document.lines.find(item=>item.id===line.originalLineId);if(!original)throw new Error("Every credited item must come from the selected original document.");const originalAccountId="revenueAccountId" in original?original.revenueAccountId:original.expenseAccountId;if(line.accountId!==originalAccountId)throw new Error("A credited item must use its original posting account.");const alreadyCredited=original.creditNoteLines.reduce((sum,item)=>sum.add(item.quantity),zero);if(line.quantity.gt(original.quantity.sub(alreadyCredited)))throw new Error(`Credit quantity exceeds the remaining quantity for ${original.description}.`);}
+    const expected=input.kind==="SALE"?"REVENUE":"EXPENSE";const accountIds=[...new Set(lines.map(line=>line.accountId))];const accounts=await tx.account.findMany({where:{tenantId:input.actor.tenantId,id:{in:accountIds},isActive:true,type:expected}});if(accounts.length!==accountIds.length)throw new Error(`Every line must use an active ${expected.toLowerCase()} account.`);
+    const control=await tx.account.findFirst({where:{tenantId:input.actor.tenantId,code:input.kind==="SALE"?"1200":"2000",isActive:true}});if(!control)throw new Error("The required control account is missing.");
+    const baseLines=lines.map(line=>({...line,base:convertForeignToBase(line.foreign,document.exchangeRate)}));const baseTotal=baseLines.reduce((sum,line)=>sum.add(line.base),zero);const partyId="customerId" in document?document.customerId:document.supplierId;
+    const common={tenantId:input.actor.tenantId,periodId:period.id,reference:input.reference,creditDate:input.creditDate,description:input.description,currency:document.currency,exchangeRate:document.exchangeRate,foreignTotal,baseTotal,createdById:input.actor.userId};
+    const note=input.kind==="SALE"
+      ?await tx.salesCreditNote.create({data:{...common,invoiceId:document.id,customerId:partyId,lines:{create:lines.map(line=>({originalInvoiceLineId:line.originalLineId,revenueAccountId:line.accountId,description:line.description,quantity:line.quantity,unitPrice:line.unitPrice,lineTotal:line.foreign}))}}})
+      :await tx.supplierCreditNote.create({data:{...common,billId:document.id,supplierId:partyId,lines:{create:lines.map(line=>({originalBillLineId:line.originalLineId,expenseAccountId:line.accountId,description:line.description,quantity:line.quantity,unitPrice:line.unitPrice,lineTotal:line.foreign}))}}});
+    const journalLines=input.kind==="SALE"
+      ?[...baseLines.map(line=>({accountId:line.accountId,debit:line.base,credit:zero,description:line.description,currencyCode:document.currency,exchangeRate:document.exchangeRate,foreignDebit:line.foreign,foreignCredit:zero})),{accountId:control.id,debit:zero,credit:baseTotal,description:`Credit against ${document.reference}`,currencyCode:document.currency,exchangeRate:document.exchangeRate,foreignDebit:zero,foreignCredit:foreignTotal}]
+      :[{accountId:control.id,debit:baseTotal,credit:zero,description:`Credit against ${document.reference}`,currencyCode:document.currency,exchangeRate:document.exchangeRate,foreignDebit:foreignTotal,foreignCredit:zero},...baseLines.map(line=>({accountId:line.accountId,debit:zero,credit:line.base,description:line.description,currencyCode:document.currency,exchangeRate:document.exchangeRate,foreignDebit:zero,foreignCredit:line.foreign}))];
+    const source:JournalSource=input.kind==="SALE"?"SALES_CREDIT_NOTE":"SUPPLIER_CREDIT_NOTE";const journal=await tx.journal.create({data:{tenantId:input.actor.tenantId,periodId:period.id,reference:input.reference,description:input.description,accountingDate:input.creditDate,status:"POSTED",source,sourceId:note.id,createdById:input.actor.userId,approvedById:input.actor.userId,postedById:input.actor.userId,postedAt:new Date(),lines:{create:journalLines}}});
+    if(input.kind==="SALE")await tx.salesCreditNote.update({where:{id:note.id},data:{journalId:journal.id}});else await tx.supplierCreditNote.update({where:{id:note.id},data:{journalId:journal.id}});
+    const status=outstanding.sub(foreignTotal).eq(0)?"PAID":"PARTIALLY_PAID";if(input.kind==="SALE")await tx.salesInvoice.update({where:{id:document.id},data:{status}});else await tx.supplierBill.update({where:{id:document.id},data:{status}});
+    await tx.auditEvent.create({data:{firmId:input.actor.firmId,tenantId:input.actor.tenantId,actorId:input.actor.userId,actorKind:"STAFF",action:input.kind==="SALE"?"SALES_CREDIT_NOTE_POSTED":"SUPPLIER_CREDIT_NOTE_POSTED",entityType:input.kind==="SALE"?"SalesCreditNote":"SupplierCreditNote",entityId:note.id,newValues:{reference:input.reference,originalReference:document.reference,currency:document.currency,foreignTotal:foreignTotal.toString(),baseTotal:baseTotal.toString(),journalId:journal.id}}});return note;
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
+}
+

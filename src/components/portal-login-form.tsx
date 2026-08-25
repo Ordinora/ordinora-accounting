@@ -1,0 +1,4 @@
+"use client";
+import { useActionState } from "react";
+import { portalLogin } from "@/app/portal/login/actions";
+export function PortalLoginForm(){const[state,action,pending]=useActionState(portalLogin,undefined);return <form action={action} className="login-form"><label htmlFor="portal-email">Email address</label><div className="input-wrap"><input id="portal-email" name="email" type="email" autoComplete="username" required/></div><label htmlFor="portal-password">Password</label><div className="input-wrap"><input id="portal-password" name="password" type="password" autoComplete="current-password" required/></div>{state?.error&&<p className="form-error" role="alert">{state.error}</p>}<button className="login-button" disabled={pending}>{pending?"Signing in…":"Open client portal"}</button></form>}

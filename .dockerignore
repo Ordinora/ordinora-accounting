@@ -1,0 +1,14 @@
+node_modules
+.next
+.next-*
+.git
+.env*
+!.env.staging.example
+!.env.oracle-staging.example
+storage
+backups
+outputs
+playwright-report
+test-results
+tmp
+npm-debug.log*

@@ -1,0 +1,11 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { db } from "@/lib/db";
+import { requireActiveTenant } from "@/lib/session";
+
+export const dynamic = "force-dynamic";
+export default async function SalesOrdersPage() {
+  const { user, tenants, active } = await requireActiveTenant(); const orders = await db.salesOrder.findMany({ where: { tenantId: active.id }, include: { customer: true, quotation: true, convertedInvoice: true }, orderBy: [{ orderDate: "desc" }, { createdAt: "desc" }] });
+  return <AppShell user={{ displayName: user.displayName, email: user.email, role: user.staffRole?.replaceAll("_", " ") || "STAFF", firmName: user.firm.name }} tenants={tenants} activeTenant={active} pageTitle="Sales Orders" pageDescription="Confirmed customer work awaiting invoicing"><main className="module-page"><header className="module-header"><div><p className="eyebrow">{active.legalName.toUpperCase()}</p><h2>Sales orders</h2><p>Track commitments and fulfillment readiness without posting the ledger early.</p></div><Link href="/sales/orders/new" className="button-primary"><Plus size={16} />New sales order</Link></header><section className="surface-card table-card"><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Reference</th><th>Customer</th><th>Order date</th><th>Expected</th><th>Status</th><th className="numeric">Total</th><th>Source</th><th /></tr></thead><tbody>{orders.map((order) => <tr key={order.id}><td><Link className="record-link" href={`/sales/orders/${order.id}`}>{order.reference}</Link></td><td>{order.customer.name}</td><td>{order.orderDate.toLocaleDateString("en-BN")}</td><td>{order.expectedDate?.toLocaleDateString("en-BN") || "—"}</td><td><span className={`status-badge ${order.status.toLowerCase()}`}>{order.status.replaceAll("_", " ")}</span></td><td className="numeric">{order.currency} {Number(order.foreignTotal).toFixed(2)}</td><td>{order.quotation ? `Quote ${order.quotation.reference}` : "Direct"}</td><td><Link className="table-action" href={`/sales/orders/${order.id}`}>View</Link></td></tr>)}{!orders.length && <tr><td className="table-empty" colSpan={8}>No sales orders yet.</td></tr>}</tbody></table></div></section></main></AppShell>;
+}

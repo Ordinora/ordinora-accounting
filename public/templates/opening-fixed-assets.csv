@@ -1,0 +1,2 @@
+AssetCode,AssetName,Category,AcquiredOn,DepreciationStartsOn,OriginalCost,ResidualValue,OpeningAccumulatedDepreciation,UsefulLifeMonths,RegistrationNumber,Location,Description
+FA-VAN-001,Toyota Hiace Delivery Van,Motor vehicles,2023-01-01,2023-01-01,25000.00,5000.00,14333.33,60,BG1234,Main branch,Opening asset at bookkeeping conversion

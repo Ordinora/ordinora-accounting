@@ -1,0 +1,22 @@
+type Account={id:string;code:string;name:string};
+type Defaults={assetCode?:string;name?:string;category?:string;description?:string|null;acquiredOn?:Date;depreciationStartsOn?:Date;originalCost?:unknown;residualValue?:unknown;openingAccumulatedDepreciation?:unknown;usefulLifeMonths?:number;method?:string;assetAccountId?:string;accumulatedDepreciationAccountId?:string;depreciationExpenseAccountId?:string;location?:string|null;registrationNumber?:string|null;status?:string};
+
+const assetCategories=[
+  "Land",
+  "Buildings",
+  "Leasehold improvements",
+  "Motor vehicles",
+  "Plant and machinery",
+  "Kitchen equipment",
+  "Furniture and fittings",
+  "Office equipment",
+  "Computer equipment",
+  "Tools and equipment",
+  "Other fixed assets",
+];
+
+export function FixedAssetForm({action,assets,expenses,defaults}:{action:(data:FormData)=>void|Promise<void>;assets:Account[];expenses:Account[];defaults?:Defaults}){
+  const d=defaults??{},date=(v?:Date)=>v?.toISOString().slice(0,10)??"";
+  const categories=d.category&&!assetCategories.includes(d.category)?[d.category,...assetCategories]:assetCategories;
+  return <form action={action} className="surface-card form-panel"><section className="form-section"><div className="section-heading"><h2>Asset details</h2><p>The purchase must also be posted separately through Payment, Purchase Invoice, or Journal Entry.</p></div><div className="form-grid"><label>Asset code<input name="assetCode" required defaultValue={d.assetCode}/></label><label>Asset name<input name="name" required defaultValue={d.name}/></label><label>Category<select name="category" required defaultValue={d.category??""}><option value="">Select asset category</option>{categories.map(category=><option key={category} value={category}>{category}</option>)}</select></label><label>Registration / serial number<input name="registrationNumber" defaultValue={d.registrationNumber??""}/></label><label>Acquired on<input name="acquiredOn" type="date" required defaultValue={date(d.acquiredOn)}/></label><label>Depreciation starts on<input name="depreciationStartsOn" type="date" required defaultValue={date(d.depreciationStartsOn)}/></label><label>Original cost<input name="originalCost" type="number" min="0.01" step="0.01" required defaultValue={Number(d.originalCost??0)}/></label><label>Residual value<input name="residualValue" type="number" min="0" step="0.01" required defaultValue={Number(d.residualValue??0)}/></label><label>Opening accumulated depreciation<input name="openingAccumulatedDepreciation" type="number" min="0" step="0.01" required defaultValue={Number(d.openingAccumulatedDepreciation??0)}/></label><label>Useful life (months)<input name="usefulLifeMonths" type="number" min="1" max="1200" required defaultValue={d.usefulLifeMonths??60}/></label><label>Depreciation method<select name="method" required defaultValue={d.method??"STRAIGHT_LINE"}><option value="STRAIGHT_LINE">Straight line</option></select><small>Additional methods will appear here when their calculation rules are enabled.</small></label><label>Status<select name="status" defaultValue={d.status??"ACTIVE"}><option value="ACTIVE">Active</option><option value="FULLY_DEPRECIATED">Fully depreciated</option><option value="DISPOSED">Disposed</option><option value="INACTIVE">Inactive</option></select></label><label>Asset cost account<select name="assetAccountId" required defaultValue={d.assetAccountId}><option value="">Select asset account</option>{assets.map(a=><option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}</select></label><label>Accumulated depreciation account<select name="accumulatedDepreciationAccountId" required defaultValue={d.accumulatedDepreciationAccountId}><option value="">Select contra-asset account</option>{assets.map(a=><option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}</select></label><label>Depreciation expense account<select name="depreciationExpenseAccountId" required defaultValue={d.depreciationExpenseAccountId}><option value="">Select expense account</option>{expenses.map(a=><option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}</select></label><label>Location<input name="location" defaultValue={d.location??""}/></label><label className="span-2">Description<textarea name="description" rows={3} defaultValue={d.description??""}/></label></div></section><div className="form-actions"><button className="button-primary">Save asset</button></div></form>
+}

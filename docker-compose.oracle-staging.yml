@@ -1,0 +1,76 @@
+services:
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      STAGING_DOMAIN: ${STAGING_DOMAIN:?Set STAGING_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+  app:
+    image: ordinora:${ORDINORA_RELEASE:-staging}
+    restart: unless-stopped
+    env_file: .env.oracle-staging
+    environment:
+      DATABASE_URL: postgresql://ordinora_app:${POSTGRES_APP_PASSWORD}@db:5432/ordinora_staging?schema=public
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      DOCUMENT_STORAGE_ROOT: /var/lib/ordinora/documents
+    volumes:
+      - ordinora_documents:/var/lib/ordinora/documents
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    depends_on:
+      db:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ordinora_app
+      POSTGRES_PASSWORD: ${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD}
+      POSTGRES_DB: ordinora_staging
+    volumes:
+      - ordinora_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ordinora_app -d ordinora_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - clamav_signatures:/var/lib/clamav
+    expose:
+      - "3310"
+    healthcheck:
+      test: ["CMD-SHELL", "printf 'zPING\\0' | nc -w 3 127.0.0.1 3310 | grep -q PONG"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 10
+
+volumes:
+  ordinora_postgres:
+  ordinora_documents:
+  clamav_signatures:
+  caddy_data:
+  caddy_config:
