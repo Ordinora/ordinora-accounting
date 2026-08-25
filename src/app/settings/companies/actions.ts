@@ -21,7 +21,7 @@ export async function createCompany(_state: CreateCompanyState, formData: FormDa
   let tenantId: string | undefined;
   try {
     const user = await requireStaff();
-    if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN"].includes(user.staffRole)) throw new Error("Only a firm administrator can create companies.");
+    if (user.staffRole !== "SYSTEM_ADMIN") throw new Error("Only the System Administrator can create companies.");
     const input = schema.parse(Object.fromEntries(formData));
     const periods = monthlyAccountingPeriods(input.setupYear);
     const duplicate = await db.tenant.count({ where: { firmId: user.firmId, legalName: { equals: input.legalName, mode: "insensitive" } } });

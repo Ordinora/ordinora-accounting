@@ -12,7 +12,7 @@ const schema = z.object({
 
 export async function revokeSession(formData: FormData) {
   const actor = await requireStaff();
-  if (!actor.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN"].includes(actor.staffRole)) throw new Error("Only a firm administrator can revoke sessions.");
+  if (actor.staffRole !== "SYSTEM_ADMIN") throw new Error("Only the System Administrator can revoke sessions.");
   const input = schema.parse(Object.fromEntries(formData));
   const target = await db.session.findFirst({
     where: { id: input.sessionId, user: { firmId: actor.firmId } },

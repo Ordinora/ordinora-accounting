@@ -5,7 +5,7 @@ import {
   Settings, ShoppingCart, Sparkles, Users,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { navigationModules } from "@/lib/navigation-modules";
+import { navigationModulesForRole } from "@/lib/navigation-modules";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -26,10 +26,9 @@ const icons = {
 
 export default async function Page({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
-  const selectedModule = navigationModules.find(item => item.key === key);
-  if (!selectedModule) notFound();
-
   const { user, tenants, active } = await requireActiveTenant();
+  const selectedModule = navigationModulesForRole(user.staffRole).find(item => item.key === key);
+  if (!selectedModule) notFound();
   const ModuleIcon = icons[key as keyof typeof icons] ?? BookOpen;
 
   return <AppShell

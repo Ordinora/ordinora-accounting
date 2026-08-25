@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ActiveSessionsPage() {
   const user = await requireStaff();
-  if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN"].includes(user.staffRole)) redirect("/");
+  if (user.staffRole !== "SYSTEM_ADMIN") redirect("/");
   const { tenants, active } = await getAuthorizedTenant(user);
   if (!active) throw new Error("No company is available.");
   const now = new Date();

@@ -5,6 +5,8 @@ export type NavigationModule = {
   links: { label: string; href: string; description: string }[];
 };
 
+import { canAccessModule } from "@/lib/staff-access";
+
 export const navigationModules: NavigationModule[] = [
   { key: "automation", label: "AI Accounting", description: "Document capture and assisted bookkeeping.", links: [
     { label: "Processing centre", href: "/automation", description: "Upload and review accounting documents." },
@@ -81,3 +83,7 @@ export const navigationModules: NavigationModule[] = [
     { label: "Multi-factor authentication", href: "/settings/security/mfa", description: "Protect your staff account with an authenticator app." },
   ] },
 ];
+
+export function navigationModulesForRole(role: string | null | undefined) {
+  return navigationModules.filter((module) => canAccessModule(role, module.key));
+}

@@ -8,7 +8,7 @@ import {
   Package, ReceiptText, Search, Settings, ShoppingCart, Sparkles, Users, X,
 } from "lucide-react";
 import { logout, selectTenant } from "@/app/actions";
-import { navigationModules } from "@/lib/navigation-modules";
+import { navigationModulesForRole, type NavigationModule } from "@/lib/navigation-modules";
 
 type TenantOption = { id: string; legalName: string };
 type ShellUser = { displayName: string; email: string; role: string; firmName: string };
@@ -27,10 +27,10 @@ const moduleIcons: Record<string, typeof ReceiptText> = {
   administration: Settings,
 };
 
-function moduleForPath(pathname: string) {
-  const moduleCentre = navigationModules.find((module) => pathname === `/modules/${module.key}`);
+function moduleForPath(pathname: string, modules: NavigationModule[]) {
+  const moduleCentre = modules.find((module) => pathname === `/modules/${module.key}`);
   if (moduleCentre) return moduleCentre.key;
-  return navigationModules.find((module) =>
+  return modules.find((module) =>
     module.links.some(({ href }) => pathname === href || pathname.startsWith(`${href}/`)),
   )?.key;
 }
@@ -46,7 +46,8 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const currentModule = moduleForPath(pathname);
+  const allowedModules = navigationModulesForRole(user.role);
+  const currentModule = moduleForPath(pathname, allowedModules);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [signoutOpen, setSignoutOpen] = useState(false);
@@ -69,7 +70,7 @@ export function AppShell({
           </Link>
           <p className="sidebar-section-label">Business modules</p>
 
-          {navigationModules.map((module) => {
+          {allowedModules.map((module) => {
             const Icon = moduleIcons[module.key] ?? ReceiptText;
             const active = currentModule === module.key;
             return (
