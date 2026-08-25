@@ -26,7 +26,7 @@ const quote = (value) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"
 const values = {
   DATABASE_URL: source.DATABASE_URL,
   DIRECT_URL: source.DIRECT_URL,
-  APP_URL: "https://warm-youtiao-045cd1.netlify.app",
+  APP_URL: process.env.NETLIFY_APP_URL || "https://your-site.netlify.app",
   DOCUMENT_UPLOADS_ENABLED: "false",
   SESSION_SECRET: randomBytes(48).toString("base64url"),
   MFA_ENCRYPTION_KEY: randomBytes(48).toString("base64url"),
