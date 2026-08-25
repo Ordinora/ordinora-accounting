@@ -6,6 +6,6 @@
   NODE_VERSION = "22"
   NETLIFY_NEXT_SKEW_PROTECTION = "true"
   SECRETS_SCAN_OMIT_KEYS = "APP_URL"
-
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+  # Next.js packages runtime environment reads into its private server bundle.
+  # Continue scanning source files and all browser-facing static assets.
+  SECRETS_SCAN_OMIT_PATHS = ".next/server/**"
