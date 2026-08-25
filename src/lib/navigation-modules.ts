@@ -69,6 +69,7 @@ export const navigationModules: NavigationModule[] = [
   ] },
   { key: "administration", label: "Administration", description: "Company, period, currency, and portal settings.", links: [
     { label: "Companies", href: "/settings/companies", description: "Create and manage client companies." },
+    { label: "Accounting staff", href: "/settings/staff", description: "Create staff accounts and limit them to assigned companies." },
     { label: "Opening balances", href: "/settings/opening-balances", description: "Post the opening general-ledger position." },
     { label: "Opening receivables & payables", href: "/settings/opening-subledgers", description: "Allocate opening balances to customers and suppliers." },
     { label: "Accounting periods", href: "/settings/periods", description: "Create, open, close, and edit financial periods." },

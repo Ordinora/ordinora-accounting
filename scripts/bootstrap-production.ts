@@ -32,7 +32,7 @@ async function main() {
         email: input.adminEmail,
         displayName: input.adminName,
         passwordHash,
-        staffRole: "FIRM_ADMIN",
+        staffRole: "SYSTEM_ADMIN",
       },
     });
     await tx.auditEvent.create({
@@ -48,7 +48,7 @@ async function main() {
     });
   });
 
-  console.log("Production firm administrator created successfully.");
+  console.log("Production system administrator created successfully.");
 }
 
 main()

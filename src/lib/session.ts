@@ -34,6 +34,32 @@ export async function getCurrentStaff() {
     if (session && !session.revokedAt) await db.session.updateMany({ where: { id: session.id, revokedAt: null }, data: { revokedAt: now } });
     return null;
   }
+  // Upgrade the single administrator created by older production bootstraps.
+  // A delegated Firm Admin is never promoted when a System Admin already exists.
+  if (session.user.staffRole === "FIRM_ADMIN") {
+    const systemAdministrator = await db.user.findFirst({
+      where: { firmId: session.user.firmId, kind: "STAFF", staffRole: "SYSTEM_ADMIN", isActive: true },
+      select: { id: true },
+    });
+    if (!systemAdministrator) {
+      await db.$transaction([
+        db.user.update({ where: { id: session.user.id }, data: { staffRole: "SYSTEM_ADMIN" } }),
+        db.auditEvent.create({
+          data: {
+            firmId: session.user.firmId,
+            actorId: session.user.id,
+            actorKind: "STAFF",
+            action: "LEGACY_ADMIN_PROMOTED",
+            entityType: "User",
+            entityId: session.user.id,
+            previousValues: { staffRole: "FIRM_ADMIN" },
+            newValues: { staffRole: "SYSTEM_ADMIN" },
+          },
+        }),
+      ]);
+      session.user.staffRole = "SYSTEM_ADMIN";
+    }
+  }
   if (shouldTouchSession(session.lastSeenAt, now)) await db.session.updateMany({ where: { id: session.id, revokedAt: null }, data: { lastSeenAt: now } });
   return session.user;
 }

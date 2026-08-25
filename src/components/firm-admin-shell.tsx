@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, LayoutDashboard, LogOut, ShieldCheck } from "lucide-react";
+import { Building2, LayoutDashboard, LogOut, ShieldCheck, Users } from "lucide-react";
 import { logout } from "@/app/actions";
 
 type FirmAdminUser = {
@@ -34,6 +34,7 @@ export function FirmAdminShell({
         <Link href="/" className={pathname === "/" ? "active" : ""}><LayoutDashboard size={18}/>Administrator dashboard</Link>
         <p>Administration</p>
         <Link href="/settings/companies" className={pathname.startsWith("/settings/companies") ? "active" : ""}><Building2 size={18}/>Companies & clients</Link>
+        <Link href="/settings/staff" className={pathname.startsWith("/settings/staff") ? "active" : ""}><Users size={18}/>Accounting staff</Link>
       </nav>
       <div className="firm-admin-identity"><ShieldCheck size={18}/><div><strong>{user.displayName}</strong><small>{user.role}</small></div></div>
       <form action={logout}><button><LogOut size={16}/>Sign out</button></form>
