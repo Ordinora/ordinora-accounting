@@ -9,3 +9,6 @@
   # Next.js packages runtime environment reads into its private server bundle.
   # Continue scanning source files and all browser-facing static assets.
   SECRETS_SCAN_OMIT_PATHS = ".next/server/**"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
