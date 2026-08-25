@@ -25,11 +25,11 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:bootstrap": "tsx scripts/bootstrap-production.ts",
     "config:check": "tsx scripts/check-production-config.ts",
-    "db:seed": "tsx prisma/seed.ts"
-    ,"db:expand-chart": "tsx prisma/expand-chart.ts"
-    ,"db:seed-commercial": "tsx prisma/seed-commercial.ts"
-    ,"db:seed-inventory": "tsx prisma/seed-inventory.ts"
-    ,"db:seed-payroll": "tsx prisma/seed-payroll.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:expand-chart": "tsx prisma/expand-chart.ts",
+    "db:seed-commercial": "tsx prisma/seed-commercial.ts",
+    "db:seed-inventory": "tsx prisma/seed-inventory.ts",
+    "db:seed-payroll": "tsx prisma/seed-payroll.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -47,6 +47,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.13",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
