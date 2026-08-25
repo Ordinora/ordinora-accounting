@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { validateAccountingFile } from "@/lib/document-file";
 import { deleteDocument } from "@/lib/document-store";
 import { quarantineAndScanDocument } from "@/lib/document-storage";
+import { documentUploadsEnabled } from "@/lib/operational-config";
 import { requireClient } from "@/lib/session";
 
 export type ClientDocumentUploadState = { error?: string; success?: string };
@@ -13,6 +14,7 @@ export type ClientDocumentUploadState = { error?: string; success?: string };
 export async function uploadClientDocument(_state: ClientDocumentUploadState, formData: FormData): Promise<ClientDocumentUploadState> {
   let storedKey: string | undefined;
   try {
+    if (!documentUploadsEnabled()) throw new Error("Document uploads are temporarily disabled for this deployment.");
     const user = await requireClient();
     const tenant = user.tenant!;
     if (!tenant.documentUploadEnabled) throw new Error("Document uploads are not enabled for this company.");

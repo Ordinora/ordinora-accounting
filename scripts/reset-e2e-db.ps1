@@ -17,6 +17,7 @@ $quotedDatabase = '"' + $databaseName.Replace('"', '""') + '"'
 & $psql $adminUrl -v ON_ERROR_STOP=1 -c "CREATE DATABASE $quotedDatabase;"
 
 $env:DATABASE_URL = $TestDatabaseUrl
+$env:DIRECT_URL = $TestDatabaseUrl
 $env:PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING = "1"
 $env:PRISMA_SCHEMA_ENGINE_BINARY = (Resolve-Path -LiteralPath "$PSScriptRoot\..\node_modules\@prisma\engines\schema-engine-windows.exe").Path
 & "$PSScriptRoot\..\node_modules\.bin\prisma.cmd" migrate deploy

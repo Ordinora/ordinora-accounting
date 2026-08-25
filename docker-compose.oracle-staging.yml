@@ -21,6 +21,7 @@ services:
     env_file: .env.oracle-staging
     environment:
       DATABASE_URL: postgresql://ordinora_app:${POSTGRES_APP_PASSWORD}@db:5432/ordinora_staging?schema=public
+      DIRECT_URL: postgresql://ordinora_app:${POSTGRES_APP_PASSWORD}@db:5432/ordinora_staging?schema=public
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
       DOCUMENT_STORAGE_ROOT: /var/lib/ordinora/documents

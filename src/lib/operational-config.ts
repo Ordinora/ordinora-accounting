@@ -14,6 +14,10 @@ function validActionKey(value: string | undefined) {
   try { return Buffer.from(value, "base64").byteLength === 32; } catch { return false; }
 }
 
+export function documentUploadsEnabled(env: Environment = process.env) {
+  return env.DOCUMENT_UPLOADS_ENABLED === "true";
+}
+
 export function validateOperationalConfig(env: Environment, cwd = process.cwd(), production = env.NODE_ENV === "production"): OperationalConfigResult {
   const errors: string[] = [], warnings: string[] = [];
   const requireValue = (condition: boolean, message: string) => {
@@ -32,17 +36,21 @@ export function validateOperationalConfig(env: Environment, cwd = process.cwd(),
     requireValue(url.protocol === "https:", "APP_URL must use HTTPS in production.");
   } catch { requireValue(false, "APP_URL must be a valid absolute URL."); }
 
+  if (env.DOCUMENT_UPLOADS_ENABLED && !["true", "false"].includes(env.DOCUMENT_UPLOADS_ENABLED)) errors.push("DOCUMENT_UPLOADS_ENABLED must be true or false.");
+  const uploadsEnabled = documentUploadsEnabled(env);
+  if (!uploadsEnabled) warnings.push("Document uploads are globally disabled.");
+
   const scanMode = (env.DOCUMENT_MALWARE_SCAN_MODE || "basic").toLowerCase();
-  if (!['basic', 'clamav'].includes(scanMode)) errors.push("DOCUMENT_MALWARE_SCAN_MODE must be basic or clamav.");
-  else if (production && scanMode !== "clamav") errors.push("Production requires DOCUMENT_MALWARE_SCAN_MODE=clamav.");
-  if (production && scanMode === "clamav" && !env.CLAMAV_HOST) errors.push("Production requires CLAMAV_HOST for the isolated malware-scanning service.");
+  if (uploadsEnabled && !['basic', 'clamav'].includes(scanMode)) errors.push("DOCUMENT_MALWARE_SCAN_MODE must be basic or clamav.");
+  else if (uploadsEnabled && production && scanMode !== "clamav") errors.push("Production requires DOCUMENT_MALWARE_SCAN_MODE=clamav when document uploads are enabled.");
+  if (uploadsEnabled && production && scanMode === "clamav" && !env.CLAMAV_HOST) errors.push("Production requires CLAMAV_HOST for the isolated malware-scanning service when document uploads are enabled.");
 
   const provider = (env.DOCUMENT_STORAGE_PROVIDER || "local").toLowerCase();
-  if (!['local', 'azure'].includes(provider)) errors.push("DOCUMENT_STORAGE_PROVIDER must be local or azure.");
+  if (uploadsEnabled && !['local', 'azure'].includes(provider)) errors.push("DOCUMENT_STORAGE_PROVIDER must be local or azure.");
   const stagingLocal = env.DEPLOYMENT_ENV === "staging" && env.ALLOW_STAGING_LOCAL_STORAGE === "true";
-  if (production && provider !== "azure" && !stagingLocal) errors.push("Production requires DOCUMENT_STORAGE_PROVIDER=azure unless explicit staging-only local storage is enabled.");
-  if (production && provider === "local" && stagingLocal) warnings.push("Staging uses local block storage; verify off-host backups and migrate documents before production.");
-  if (provider === "azure") {
+  if (uploadsEnabled && production && provider !== "azure" && !stagingLocal) errors.push("Production requires DOCUMENT_STORAGE_PROVIDER=azure unless explicit staging-only local storage is enabled.");
+  if (uploadsEnabled && production && provider === "local" && stagingLocal) warnings.push("Staging uses local block storage; verify off-host backups and migrate documents before production.");
+  if (uploadsEnabled && provider === "azure") {
     try {
       const container = new URL(env.AZURE_BLOB_CONTAINER_URL || "");
       if (container.protocol !== "https:" || container.search || container.hash) errors.push("AZURE_BLOB_CONTAINER_URL must be an HTTPS container URL without a query string.");
@@ -51,8 +59,8 @@ export function validateOperationalConfig(env: Environment, cwd = process.cwd(),
   }
 
   const storage = env.DOCUMENT_STORAGE_ROOT;
-  if (provider === "local" && !storage) requireValue(false, "DOCUMENT_STORAGE_ROOT must identify private durable storage.");
-  else if (provider === "local" && storage) {
+  if (uploadsEnabled && provider === "local" && !storage) requireValue(false, "DOCUMENT_STORAGE_ROOT must identify private durable storage.");
+  else if (uploadsEnabled && provider === "local" && storage) {
     const resolved = path.resolve(storage), publicRoot = path.resolve(cwd, "public"), workspace = path.resolve(cwd);
     if (production && !path.isAbsolute(storage)) errors.push("DOCUMENT_STORAGE_ROOT must be absolute in production.");
     if (resolved === publicRoot || resolved.startsWith(`${publicRoot}${path.sep}`)) errors.push("DOCUMENT_STORAGE_ROOT cannot be inside public.");

@@ -10,6 +10,7 @@ import { validateAccountingFile } from "@/lib/document-file";
 import { deleteDocument, readDocument } from "@/lib/document-store";
 import { quarantineAndScanDocument } from "@/lib/document-storage";
 import { processAccountingDocument } from "@/lib/document-processing";
+import { documentUploadsEnabled } from "@/lib/operational-config";
 import { requireActiveTenant } from "@/lib/session";
 
 export type UploadDocumentState = { error?: string };
@@ -25,6 +26,7 @@ const requestedTypes = ["AUTO", ...Object.values(AccountingDocumentType)] as con
 export async function uploadAccountingDocument(_state: UploadDocumentState, formData: FormData): Promise<UploadDocumentState> {
   let createdId: string | undefined;
   try {
+    if (!documentUploadsEnabled()) throw new Error("Document uploads are temporarily disabled for this deployment.");
     const { user, active } = await requireActiveTenant();
     authorize(user.staffRole);
     const requested = z.enum(requestedTypes).parse(formData.get("requestedType"));

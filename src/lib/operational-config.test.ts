@@ -11,6 +11,7 @@ const validProduction = {
   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
   HEALTH_CHECK_TOKEN: `${strong}-health`,
   APP_URL: "https://accounts.example.com",
+  DOCUMENT_UPLOADS_ENABLED: "true",
   DOCUMENT_MALWARE_SCAN_MODE: "clamav",
   CLAMAV_HOST: "clamav",
   DOCUMENT_STORAGE_PROVIDER: "azure",
@@ -49,5 +50,20 @@ describe("production operational configuration", () => {
     const result = validateOperationalConfig({ NODE_ENV: "development", APP_URL: "http://localhost:3000", DOCUMENT_MALWARE_SCAN_MODE: "basic" }, process.cwd(), false);
     expect(result.errors).toEqual([]);
     expect(result.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("allows production startup without document infrastructure when uploads are disabled", () => {
+    const result = validateOperationalConfig({
+      ...validProduction,
+      DOCUMENT_UPLOADS_ENABLED: "false",
+      DOCUMENT_MALWARE_SCAN_MODE: "",
+      CLAMAV_HOST: "",
+      DOCUMENT_STORAGE_PROVIDER: "",
+      AZURE_BLOB_CONTAINER_URL: "",
+      AZURE_BLOB_SAS_TOKEN: "",
+    }, "C:\\app", true);
+
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual(expect.arrayContaining([expect.stringContaining("globally disabled")]));
   });
 });
