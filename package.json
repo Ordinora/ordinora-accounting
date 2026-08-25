@@ -23,6 +23,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
+    "db:bootstrap": "tsx scripts/bootstrap-production.ts",
     "config:check": "tsx scripts/check-production-config.ts",
     "db:seed": "tsx prisma/seed.ts"
     ,"db:expand-chart": "tsx prisma/expand-chart.ts"
