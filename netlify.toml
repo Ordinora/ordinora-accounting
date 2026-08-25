@@ -6,9 +6,10 @@
   NODE_VERSION = "22"
   NETLIFY_NEXT_SKEW_PROTECTION = "true"
   SECRETS_SCAN_OMIT_KEYS = "APP_URL"
-  # Next.js packages runtime environment reads into its private server bundle.
-  # Continue scanning source files and all browser-facing static assets.
-  SECRETS_SCAN_OMIT_PATHS = ".next/server/**"
+  # Next.js and the Netlify adapter copy runtime-only values into private build
+  # caches, server manifests, and the internal SSR function. Source files and
+  # every browser-facing static asset remain covered by secret scanning.
+  SECRETS_SCAN_OMIT_PATHS = ".netlify/.next/cache/**,.netlify/.next/server/**,.netlify/.next/standalone/.next/server/**,.netlify/functions-internal/**"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
