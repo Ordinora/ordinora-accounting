@@ -1,6 +1,7 @@
 import "server-only";
-import { JournalSource, Prisma, StaffRole } from "@prisma/client";
+import { AccountControlRole, JournalSource, Prisma, StaffRole } from "@prisma/client";
 import { parseMoneyToMinor } from "./accounting";
+import { requireControlAccount } from "./control-accounts";
 import { calculateSettlementValues, realizedFxPosting } from "./currency";
 import { isOpeningControlAccount } from "./opening-control";
 import { runSerializableTransaction } from "./serializable-transaction";
@@ -27,7 +28,7 @@ export async function postSettlement(input:SettlementInput){
     if(cheque?.paymentMethod==="BANK_CHEQUE"&&/cash on hand|petty cash/i.test(bank.name))throw new Error("A bank cheque must be issued from a bank account, not a cash account.");
     if(cheque)await ensureUniqueChequeNumber(tx,input.actor.tenantId,bank.id,cheque.chequeNumber);
     const fx=await tx.account.findFirst({where:{tenantId:tenant.id,code:"4310",isActive:true}});if(!fx)throw new Error("Foreign exchange gains (losses) account 4310 is missing.");
-    const control=await tx.account.findFirst({where:{tenantId:tenant.id,code:input.kind==="RECEIPT"?"1200":"2000",isActive:true}});if(!control)throw new Error("The required receivable or payable control account is missing.");
+    const control=await requireControlAccount(tx,tenant.id,input.kind==="RECEIPT"?AccountControlRole.TRADE_RECEIVABLES:AccountControlRole.TRADE_PAYABLES);
     const documents=input.kind==="RECEIPT"?await tx.salesInvoice.findMany({where:{id:{in:ids},tenantId:tenant.id,customerId:input.partyId,status:{in:["POSTED","PARTIALLY_PAID","OVERDUE"]}},include:{allocations:true,creditNotes:true}}):await tx.supplierBill.findMany({where:{id:{in:ids},tenantId:tenant.id,supplierId:input.partyId,status:{in:["POSTED","PARTIALLY_PAID","OVERDUE"]}},include:{allocations:true,creditNotes:true}});
     if(documents.length!==ids.length)throw new Error("Every selected document must be open and belong to the selected party.");
     let openingPaymentControl=control;

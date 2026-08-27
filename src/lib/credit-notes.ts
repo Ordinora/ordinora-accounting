@@ -1,6 +1,7 @@
 import "server-only";
-import { JournalSource, Prisma, StaffRole } from "@prisma/client";
+import { AccountControlRole, JournalSource, Prisma, StaffRole } from "@prisma/client";
 import { db } from "./db";
+import { requireControlAccount } from "./control-accounts";
 import { parseMoneyToMinor } from "./accounting";
 import { convertForeignToBase } from "./currency";
 
@@ -23,7 +24,7 @@ export async function postCreditNote(input:{kind:"SALE"|"PURCHASE";actor:Actor;d
     const allocated=document.allocations.reduce((sum,a)=>sum.add(a.foreignAmount),zero);const credited=document.creditNotes.reduce((sum,c)=>sum.add(c.foreignTotal),zero);const outstanding=document.foreignTotal.sub(allocated).sub(credited);if(foreignTotal.gt(outstanding))throw new Error(`Credit total exceeds the outstanding amount on ${document.reference}.`);
     for(const line of lines){const original=document.lines.find(item=>item.id===line.originalLineId);if(!original)throw new Error("Every credited item must come from the selected original document.");const originalAccountId="revenueAccountId" in original?original.revenueAccountId:original.expenseAccountId;if(line.accountId!==originalAccountId)throw new Error("A credited item must use its original posting account.");const alreadyCredited=original.creditNoteLines.reduce((sum,item)=>sum.add(item.quantity),zero);if(line.quantity.gt(original.quantity.sub(alreadyCredited)))throw new Error(`Credit quantity exceeds the remaining quantity for ${original.description}.`);}
     const expected=input.kind==="SALE"?"REVENUE":"EXPENSE";const accountIds=[...new Set(lines.map(line=>line.accountId))];const accounts=await tx.account.findMany({where:{tenantId:input.actor.tenantId,id:{in:accountIds},isActive:true,type:expected}});if(accounts.length!==accountIds.length)throw new Error(`Every line must use an active ${expected.toLowerCase()} account.`);
-    const control=await tx.account.findFirst({where:{tenantId:input.actor.tenantId,code:input.kind==="SALE"?"1200":"2000",isActive:true}});if(!control)throw new Error("The required control account is missing.");
+    const control=await requireControlAccount(tx,input.actor.tenantId,input.kind==="SALE"?AccountControlRole.TRADE_RECEIVABLES:AccountControlRole.TRADE_PAYABLES);
     const baseLines=lines.map(line=>({...line,base:convertForeignToBase(line.foreign,document.exchangeRate)}));const baseTotal=baseLines.reduce((sum,line)=>sum.add(line.base),zero);const partyId="customerId" in document?document.customerId:document.supplierId;
     const common={tenantId:input.actor.tenantId,periodId:period.id,reference:input.reference,creditDate:input.creditDate,description:input.description,currency:document.currency,exchangeRate:document.exchangeRate,foreignTotal,baseTotal,createdById:input.actor.userId};
     const note=input.kind==="SALE"
@@ -38,4 +39,3 @@ export async function postCreditNote(input:{kind:"SALE"|"PURCHASE";actor:Actor;d
     await tx.auditEvent.create({data:{firmId:input.actor.firmId,tenantId:input.actor.tenantId,actorId:input.actor.userId,actorKind:"STAFF",action:input.kind==="SALE"?"SALES_CREDIT_NOTE_POSTED":"SUPPLIER_CREDIT_NOTE_POSTED",entityType:input.kind==="SALE"?"SalesCreditNote":"SupplierCreditNote",entityId:note.id,newValues:{reference:input.reference,originalReference:document.reference,currency:document.currency,foreignTotal:foreignTotal.toString(),baseTotal:baseTotal.toString(),journalId:journal.id}}});return note;
   },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
 }
-

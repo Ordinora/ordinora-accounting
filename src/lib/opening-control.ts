@@ -1,18 +1,16 @@
-import { Prisma } from "@prisma/client";
+import { AccountControlRole, Prisma } from "@prisma/client";
+import { controlRoleForOpeningKind } from "./control-accounts";
 
 type OpeningLine = {
   debit: Prisma.Decimal;
   credit: Prisma.Decimal;
-  account: { code: string; name: string };
+  account: { controlRole: AccountControlRole | null };
 };
 
 export type OpeningControlKind = "RECEIVABLE" | "PAYABLE";
 
 export function isOpeningControlAccount(line: OpeningLine, kind: OpeningControlKind) {
-  const name = line.account.name.trim().toLocaleLowerCase();
-  return kind === "RECEIVABLE"
-    ? line.account.code === "1200" || name.includes("trade receivable")
-    : ["2000", "2100"].includes(line.account.code) || name.includes("trade payable");
+  return line.account.controlRole === controlRoleForOpeningKind[kind];
 }
 
 export function openingControlBalance(lines: OpeningLine[] | undefined, kind: OpeningControlKind) {

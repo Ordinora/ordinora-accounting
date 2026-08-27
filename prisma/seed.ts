@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { bruneiChart } from "./brunei-chart";
+import { bruneiChart, controlRoleForChartCode } from "./brunei-chart";
 
 const prisma = new PrismaClient();
 
@@ -63,7 +63,7 @@ async function main() {
     await prisma.supplier.create({ data: { tenantId: tenant.id, code: `SUP-${i + 1}01`, name: `Fictional Supplier ${i + 1}`, email: `supplier${i + 1}@demo.invalid`, paymentTermsDays: 30 } });
     const openPeriod = await prisma.accountingPeriod.create({ data: { tenantId: tenant.id, name: "August 2026", startsOn: new Date("2026-08-01"), endsOn: new Date("2026-08-31"), status: "OPEN" } });
     await prisma.accountingPeriod.create({ data: { tenantId: tenant.id, name: "July 2026", startsOn: new Date("2026-07-01"), endsOn: new Date("2026-07-31"), status: i === 0 ? "LOCKED" : "CLOSED", lockedAt: i === 0 ? new Date("2026-08-10") : null } });
-    const accounts = await Promise.all(bruneiChart.map(([code, name, type, classification, isControlAccount]) => prisma.account.create({ data: { tenantId: tenant.id, code, name, type, reportingClassification: classification, isControlAccount: Boolean(isControlAccount) } })));
+    const accounts = await Promise.all(bruneiChart.map(([code, name, type, classification, isControlAccount]) => prisma.account.create({ data: { tenantId: tenant.id, code, name, type, reportingClassification: classification, isControlAccount: Boolean(isControlAccount), controlRole: controlRoleForChartCode(code) } })));
     const receivables = accounts.find((account) => account.code === "1200")!;
     const salesRevenue = accounts.find((account) => account.code === "4000")!;
     const journal = await prisma.journal.create({ data: { tenantId: tenant.id, periodId: openPeriod.id, reference: `SI-2026-${String(i + 1).padStart(4, "0")}`, description: "Fictional demonstration invoice", accountingDate: new Date("2026-08-05"), status: "POSTED", source: "SALES_INVOICE", createdById: accountant.id, approvedById: accountant.id, postedById: accountant.id, postedAt: new Date("2026-08-05T04:00:00Z"), lines: { create: [ { accountId: receivables.id, debit: "1250.00", credit: "0" }, { accountId: salesRevenue.id, debit: "0", credit: "1250.00" } ] } } });

@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { bruneiChart } from "../../../../prisma/brunei-chart";
+import { bruneiChart, controlRoleForChartCode } from "../../../../prisma/brunei-chart";
 import { monthlyAccountingPeriods } from "@/lib/company-setup";
 import { db } from "@/lib/db";
 import { ACTIVE_TENANT_COOKIE, requireStaff } from "@/lib/session";
@@ -43,7 +43,7 @@ export async function createCompany(_state: CreateCompanyState, formData: FormDa
         documentUploadEnabled: false, enabledDashboardCards: ["cash", "revenue", "receivables", "payables"],
       } });
       await tx.staffTenantAssignment.upsert({ where: { userId_tenantId: { userId: user.id, tenantId: tenant.id } }, update: {}, create: { userId: user.id, tenantId: tenant.id } });
-      await tx.account.createMany({ data: bruneiChart.map(([code, name, type, reportingClassification, isControlAccount]) => ({ tenantId: tenant.id, code, name, type, reportingClassification, isControlAccount: Boolean(isControlAccount) })) });
+      await tx.account.createMany({ data: bruneiChart.map(([code, name, type, reportingClassification, isControlAccount]) => ({ tenantId: tenant.id, code, name, type, reportingClassification, isControlAccount: Boolean(isControlAccount), controlRole: controlRoleForChartCode(code) })) });
       await tx.accountingPeriod.createMany({ data: periods.map((period) => ({ tenantId: tenant.id, ...period })) });
       await tx.auditEvent.create({ data: { firmId: user.firmId, tenantId: tenant.id, actorId: user.id, actorKind: "STAFF", action: "COMPANY_CREATED", entityType: "Tenant", entityId: tenant.id, newValues: { legalName: tenant.legalName, setupYear: input.setupYear, accountsCreated: bruneiChart.length, periodsCreated: periods.length } } });
       return tenant;

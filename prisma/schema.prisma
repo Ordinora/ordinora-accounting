@@ -62,6 +62,11 @@ enum AccountType {
   EXPENSE
 }
 
+enum AccountControlRole {
+  TRADE_RECEIVABLES
+  TRADE_PAYABLES
+}
+
 enum JournalStatus {
   DRAFT
   IN_REVIEW
@@ -828,6 +833,7 @@ model Account {
   type                          AccountType
   reportingClassification       String
   isControlAccount              Boolean                  @default(false)
+  controlRole                   AccountControlRole?
   isActive                      Boolean                  @default(true)
   tenant                        Tenant                   @relation(fields: [tenantId], references: [id])
   lines                         JournalLine[]
@@ -861,6 +867,7 @@ model Account {
   payrollSettlementBankAccounts PayrollSettlement[]
 
   @@unique([tenantId, code])
+  @@unique([tenantId, controlRole])
   @@index([tenantId, type])
 }
 

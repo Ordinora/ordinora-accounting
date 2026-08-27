@@ -1,5 +1,5 @@
 import "server-only";
-import { Prisma } from "@prisma/client";
+import { AccountControlRole, Prisma } from "@prisma/client";
 import { db } from "./db";
 import { calculateFixedAssetBookValue } from "./fixed-assets";
 const zero=new Prisma.Decimal(0),sum=(values:Prisma.Decimal[])=>values.reduce((total,value)=>total.add(value),zero);
@@ -18,12 +18,12 @@ export async function monthEndReview(tenantId:string,asOf:Date){
   db.fixedAsset.findMany({where:{tenantId,status:"ACTIVE",acquiredOn:{lte:asOf}},include:{depreciationEntries:{where:{depreciationDate:{lte:asOf}}}}}),
   db.payrollRun.findMany({where:{tenantId,payDate:{lte:asOf},status:{in:["POSTED","LOCKED"]}},include:{entries:true}}),
   db.payrollSettlement.findMany({where:{tenantId,paymentDate:{lte:asOf}}}),
-  db.account.findMany({where:{tenantId,isActive:true,code:{in:["1200","2000","2210"]}},select:{code:true}}),
+  db.account.findMany({where:{tenantId,isActive:true,OR:[{controlRole:{in:[AccountControlRole.TRADE_RECEIVABLES,AccountControlRole.TRADE_PAYABLES]}},{code:"2210"}]},select:{code:true,controlRole:true}}),
   db.tenant.findUniqueOrThrow({where:{id:tenantId},select:{inventoryCostingMethod:true}}),
   db.inventoryBalance.findMany({where:{item:{tenantId}},select:{itemId:true,locationId:true,quantity:true,inventoryValue:true}}),
   db.inventoryCostLayer.findMany({where:{tenantId,remainingQuantity:{gt:zero}},select:{itemId:true,locationId:true,remainingQuantity:true,unitCost:true}})
  ]);
- const debit=sum(journalLines.map(line=>line.debit)),credit=sum(journalLines.map(line=>line.credit)),ledgerAr=sum(journalLines.filter(line=>line.account.code==="1200").map(line=>line.debit.sub(line.credit))),ledgerAp=sum(journalLines.filter(line=>["2000","2100"].includes(line.account.code)).map(line=>line.credit.sub(line.debit)));
+ const debit=sum(journalLines.map(line=>line.debit)),credit=sum(journalLines.map(line=>line.credit)),ledgerAr=sum(journalLines.filter(line=>line.account.controlRole===AccountControlRole.TRADE_RECEIVABLES).map(line=>line.debit.sub(line.credit))),ledgerAp=sum(journalLines.filter(line=>line.account.controlRole===AccountControlRole.TRADE_PAYABLES).map(line=>line.credit.sub(line.debit)));
  const subledgerAr=sum(invoices.map(invoice=>invoice.baseTotal.sub(sum(invoice.allocations.filter(a=>a.receipt.receiptDate<=asOf).map(a=>a.carryingBaseAmount))).sub(sum(invoice.creditNotes.filter(note=>note.creditDate<=asOf).map(note=>note.baseTotal))))),subledgerAp=sum(bills.map(bill=>bill.baseTotal.sub(sum(bill.allocations.filter(a=>a.payment.paymentDate<=asOf).map(a=>a.carryingBaseAmount))).sub(sum(bill.creditNotes.filter(note=>note.creditDate<=asOf).map(note=>note.baseTotal)))));
  const inventoryAccountIds=[...new Set(movements.map(m=>m.item.inventoryAccountId))],ledgerInventory=sum(journalLines.filter(line=>inventoryAccountIds.includes(line.accountId)).map(line=>line.debit.sub(line.credit))),movementInventory=sum(movements.map(movement=>movement.totalCost));
  const comparison=(key:string,label:string,ledger:Prisma.Decimal,supporting:Prisma.Decimal,href:string):CloseCheck=>{const difference=ledger.sub(supporting),pass=difference.abs().lt(new Prisma.Decimal("0.01"));return{key,label,status:pass?"PASS":"FAIL",ledger,supporting,difference,detail:pass?"Ledger agrees with the supporting register.":"Investigate and correct the difference before closing the period.",href}};
@@ -34,7 +34,7 @@ export async function monthEndReview(tenantId:string,asOf:Date){
  const payrollLedger=sum(journalLines.filter(line=>line.account.code==="2210").map(line=>line.credit.sub(line.debit))),payrollSupporting=sum(payrollRuns.flatMap(run=>run.entries.map(entry=>entry.netPay))).sub(sum(payrollSettlements.map(settlement=>settlement.amount)));
  const openProfit=sum(journalLines.filter(line=>line.account.type==="REVENUE").map(line=>line.credit.sub(line.debit))).sub(sum(journalLines.filter(line=>line.account.type==="EXPENSE").map(line=>line.debit.sub(line.credit))));
  const currentEarningsAccount=sum(journalLines.filter(line=>line.account.type==="EQUITY"&&(line.account.code==="3200"||line.account.name.trim().toLowerCase()==="current-year earnings")).map(line=>line.credit.sub(line.debit))),duplicateCurrentEarnings=!openProfit.eq(0)&&!currentEarningsAccount.eq(0);
- const requiredControls=["1200","2000",...(payrollRuns.length?["2210"]:[])],configuredControls=new Set(controlAccounts.map(account=>account.code)),missingControls=requiredControls.filter(code=>!configuredControls.has(code));
+ const configuredRoles=new Set(controlAccounts.map(account=>account.controlRole).filter(Boolean)),missingControls:string[]=[];if(!configuredRoles.has(AccountControlRole.TRADE_RECEIVABLES))missingControls.push("Trade receivables");if(!configuredRoles.has(AccountControlRole.TRADE_PAYABLES))missingControls.push("Trade payables");if(payrollRuns.length&&!controlAccounts.some(account=>account.code==="2210"))missingControls.push("Payroll payable (2210)");
  const checks:CloseCheck[]=[
   {key:"ledger",label:"General ledger balance",status:debit.eq(credit)?"PASS":"FAIL",ledger:debit,supporting:credit,difference:debit.sub(credit),detail:debit.eq(credit)?"Posted debits equal posted credits.":"The posted ledger is out of balance.",href:"/reports/trial-balance"},
   comparison("receivables","Trade receivables control",ledgerAr,subledgerAr,"/reports/receivables"),

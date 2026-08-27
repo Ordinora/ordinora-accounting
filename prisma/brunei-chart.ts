@@ -10,3 +10,9 @@ export const bruneiChart = [
   ["6000","Salaries and wages","EXPENSE","Indirect Expenses"],["6010","Employer SPK contributions","EXPENSE","Indirect Expenses"],["6100","Rent and premises","EXPENSE","Indirect Expenses"],["6200","Utilities","EXPENSE","Indirect Expenses"],["6300","Office and administration","EXPENSE","Indirect Expenses"],["6400","Professional fees","EXPENSE","Indirect Expenses"],["6500","Repairs and maintenance","EXPENSE","Indirect Expenses"],["6600","Travel and transport","EXPENSE","Indirect Expenses"],["6700","Marketing and promotion","EXPENSE","Indirect Expenses"],["6800","Bank charges","EXPENSE","Indirect Expenses"],["6900","Depreciation expense","EXPENSE","Indirect Expenses"],["6910","Interest expense","EXPENSE","Other Expenses"],["7000","Corporate income tax expense","EXPENSE","Tax Expenses"],
   ["6810","Cash over and short","EXPENSE","Indirect Expenses"],
 ] as const;
+
+export function controlRoleForChartCode(code: string) {
+  if (code === "1200") return "TRADE_RECEIVABLES" as const;
+  if (code === "2000") return "TRADE_PAYABLES" as const;
+  return null;
+}

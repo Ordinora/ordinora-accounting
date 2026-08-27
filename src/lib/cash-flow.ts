@@ -1,12 +1,12 @@
-import { Prisma } from "@prisma/client";
+import { AccountControlRole, Prisma } from "@prisma/client";
 
 export type CashFlowActivity = "OPERATING" | "INVESTING" | "FINANCING";
 const zero = new Prisma.Decimal(0);
 const isCash = (account: { type: string; reportingClassification: string }) => account.type === "ASSET" && account.reportingClassification === "Cash and cash equivalents";
 
-export function classifyCashCounterpart(account: { code: string; type: string; reportingClassification: string }): CashFlowActivity {
+export function classifyCashCounterpart(account: { code: string; type: string; reportingClassification: string; controlRole: AccountControlRole | null }): CashFlowActivity {
   const classification = account.reportingClassification.toLowerCase();
-  const workingCapitalControl = ["1200", "2000", "2100", "2210"].includes(account.code);
+  const workingCapitalControl = account.controlRole !== null || account.code === "2210";
   if (account.type === "EQUITY") return "FINANCING";
   if (account.type === "LIABILITY" && !classification.includes("payable") && !workingCapitalControl) return "FINANCING";
   if (account.type === "ASSET" && !workingCapitalControl && !classification.includes("receivable") && !classification.includes("inventory") && !classification.includes("prepayment")) return "INVESTING";
@@ -16,7 +16,7 @@ export function classifyCashCounterpart(account: { code: string; type: string; r
 export type CashFlowCounterpartLine = {
   debit: Prisma.Decimal;
   credit: Prisma.Decimal;
-  account: { code: string; type: string; reportingClassification: string };
+  account: { code: string; type: string; reportingClassification: string; controlRole: AccountControlRole | null };
 };
 
 export function allocateCashFlowByActivity(lines: CashFlowCounterpartLine[]) {

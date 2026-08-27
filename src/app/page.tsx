@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowUpRight, Banknote, Building2, CalendarClock, Circle
 import { AppShell } from "@/components/app-shell";
 import { FirmAdminShell } from "@/components/firm-admin-shell";
 import { calculateDashboardBalances } from "@/lib/dashboard-calculations";
+import { requireTradeControlAccounts } from "@/lib/control-accounts";
 import { db } from "@/lib/db";
 import { journalDescriptionLabel } from "@/lib/journal-labels";
 import { getAuthorizedTenant, requireStaff } from "@/lib/session";
@@ -25,7 +26,7 @@ export default async function Home() {
     </main>
   </FirmAdminShell>;
   if (!active) return <main className="empty-state"><h1>No assigned clients</h1><p>Ask a firm administrator to assign a client to your account.</p><form action={logout}><button className="button-secondary">Sign out</button></form></main>;
-  const [journals, ledgerLines, openPeriod] = await Promise.all([db.journal.findMany({ where: { tenantId: active.id, status: { in: ["POSTED","REVERSED"] } }, include: { lines: { include: { account: true } } }, orderBy: { createdAt: "desc" }, take: 8 }), db.journalLine.findMany({ where: { journal: { tenantId: active.id, status: { in: ["POSTED", "REVERSED"] } } }, include: { account: true } }), db.accountingPeriod.findFirst({ where: { tenantId: active.id, status: "OPEN" }, orderBy: { startsOn: "desc" } })]);
+  const [journals, ledgerLines, openPeriod] = await Promise.all([db.journal.findMany({ where: { tenantId: active.id, status: { in: ["POSTED","REVERSED"] } }, include: { lines: { include: { account: true } } }, orderBy: { createdAt: "desc" }, take: 8 }), db.journalLine.findMany({ where: { journal: { tenantId: active.id, status: { in: ["POSTED", "REVERSED"] } } }, include: { account: true } }), db.accountingPeriod.findFirst({ where: { tenantId: active.id, status: "OPEN" }, orderBy: { startsOn: "desc" } }), db.$transaction((tx)=>requireTradeControlAccounts(tx,active.id))]);
   for (const journal of journals) journal.description = journalDescriptionLabel(journal.source, journal.description);
   const balances = calculateDashboardBalances(ledgerLines);
   const kpis=[{label:"Cash & bank balance",value:money(balances.cashAndBank),hint:"All posted cash and bank accounts",Icon:Landmark},{label:"Accounts receivable",value:money(balances.receivables),hint:"Outstanding customers",Icon:WalletCards},{label:"Accounts payable",value:money(balances.payables),hint:"Outstanding suppliers",Icon:ReceiptText},{label:"Net profit",value:money(balances.netProfit),hint:"Accrual basis · posted income less expenses",Icon:CircleDollarSign}];
