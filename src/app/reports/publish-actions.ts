@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { buildReportSnapshot } from "@/lib/report-snapshot";
 import { requireActiveTenant } from "@/lib/session";
 
-const schema = z.object({ type: z.enum(["trial-balance", "profit-loss", "income-statement", "balance-sheet", "receivables", "payables", "inventory"]), from: z.coerce.date(), asOf: z.coerce.date() });
+const schema = z.object({ type: z.enum(["trial-balance", "profit-loss", "income-statement", "revenue-statement", "balance-sheet", "receivables", "payables", "inventory"]), from: z.coerce.date(), asOf: z.coerce.date() });
 export async function publishReport(formData: FormData) {
   const { user, active } = await requireActiveTenant();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot publish reports.");

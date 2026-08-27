@@ -28,3 +28,12 @@ export function realizedFxPosting(kind: "RECEIPT" | "PAYMENT", difference: Prism
   const isDebit = kind === "RECEIPT" ? difference.lt(0) : difference.gt(0);
   return { debit: isDebit ? difference.abs() : new Prisma.Decimal(0), credit: isDebit ? new Prisma.Decimal(0) : difference.abs() };
 }
+
+export function formatCurrencyAmount(currency: string, value: unknown) {
+  const numeric = Number(value);
+  const formatted = Math.abs(numeric).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return numeric < 0 ? `${currency} (${formatted})` : `${currency} ${formatted}`;
+}

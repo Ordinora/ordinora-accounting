@@ -1,3 +1,56 @@
-"use server";import { redirect } from "next/navigation";import { z } from "zod";import { db } from "@/lib/db";import { requireActiveTenant } from "@/lib/session";
-export async function staffQuestionReply(questionId:string,formData:FormData){const{user,active}=await requireActiveTenant(),body=z.string().trim().min(1).max(4000).parse(formData.get("body")),internalOnly=formData.get("internalOnly")==="on";const question=await db.question.findFirst({where:{id:questionId,tenantId:active.id}});if(!question)throw new Error("Question not found for this company.");await db.$transaction([db.questionMessage.create({data:{questionId:question.id,authorId:user.id,body,internalOnly}}),db.question.update({where:{id:question.id},data:{status:internalOnly?question.status:"ANSWERED"}}),db.auditEvent.create({data:{firmId:user.firmId,tenantId:active.id,actorId:user.id,actorKind:"STAFF",action:internalOnly?"QUESTION_INTERNAL_NOTE_ADDED":"QUESTION_ANSWERED",entityType:"Question",entityId:question.id}})]);redirect(`/settings/portal/questions/${question.id}`)}
-export async function resolveQuestion(questionId:string){const{user,active}=await requireActiveTenant();const question=await db.question.findFirst({where:{id:questionId,tenantId:active.id}});if(!question)throw new Error("Question not found for this company.");await db.$transaction([db.question.update({where:{id:question.id},data:{status:"RESOLVED",resolvedAt:new Date()}}),db.auditEvent.create({data:{firmId:user.firmId,tenantId:active.id,actorId:user.id,actorKind:"STAFF",action:"QUESTION_RESOLVED",entityType:"Question",entityId:question.id}})]);redirect(`/settings/portal/questions/${question.id}`)}
+"use server";
+
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { db } from "@/lib/db";
+import { requireActiveTenant } from "@/lib/session";
+import { assertCanAccessAdministrationFeature } from "@/lib/staff-access";
+
+export async function staffQuestionReply(questionId: string, formData: FormData) {
+  const { user, active } = await requireActiveTenant();
+  assertCanAccessAdministrationFeature(user.staffRole, "client-questions");
+  const body = z.string().trim().min(1).max(4000).parse(formData.get("body"));
+  const internalOnly = formData.get("internalOnly") === "on";
+  const question = await db.question.findFirst({ where: { id: questionId, tenantId: active.id } });
+  if (!question) throw new Error("Question not found for this company.");
+
+  await db.$transaction([
+    db.questionMessage.create({ data: { questionId: question.id, authorId: user.id, body, internalOnly } }),
+    db.question.update({ where: { id: question.id }, data: { status: internalOnly ? question.status : "ANSWERED" } }),
+    db.auditEvent.create({
+      data: {
+        firmId: user.firmId,
+        tenantId: active.id,
+        actorId: user.id,
+        actorKind: "STAFF",
+        action: internalOnly ? "QUESTION_INTERNAL_NOTE_ADDED" : "QUESTION_ANSWERED",
+        entityType: "Question",
+        entityId: question.id,
+      },
+    }),
+  ]);
+  redirect(`/settings/portal/questions/${question.id}`);
+}
+
+export async function resolveQuestion(questionId: string) {
+  const { user, active } = await requireActiveTenant();
+  assertCanAccessAdministrationFeature(user.staffRole, "client-questions");
+  const question = await db.question.findFirst({ where: { id: questionId, tenantId: active.id } });
+  if (!question) throw new Error("Question not found for this company.");
+
+  await db.$transaction([
+    db.question.update({ where: { id: question.id }, data: { status: "RESOLVED", resolvedAt: new Date() } }),
+    db.auditEvent.create({
+      data: {
+        firmId: user.firmId,
+        tenantId: active.id,
+        actorId: user.id,
+        actorKind: "STAFF",
+        action: "QUESTION_RESOLVED",
+        entityType: "Question",
+        entityId: question.id,
+      },
+    }),
+  ]);
+  redirect(`/settings/portal/questions/${question.id}`);
+}

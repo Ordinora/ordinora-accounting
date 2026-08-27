@@ -2,12 +2,13 @@ import Link from "next/link";
 import { Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
+import { formatCurrencyAmount } from "@/lib/currency";
 import { payrollEntriesForPeriod, payrollEntryGross, payrollReportTotals } from "@/lib/payroll-reports";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 const parsed = (value: string | undefined, fallback: Date) => value ? new Date(`${value}T00:00:00`) : fallback;
-const money = (currency: string, value: unknown) => `${currency} ${Number(value).toLocaleString("en-BN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = formatCurrencyAmount;
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ employeeId?: string; from?: string; to?: string }> }) {
   const query = await searchParams, { user, tenants, active } = await requireActiveTenant(), now = new Date();

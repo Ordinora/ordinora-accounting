@@ -107,7 +107,7 @@ export function AppShell({
               {menuOpen && (
                 <div className="profile-menu">
                   <div className="profile-summary"><strong>{user.displayName}</strong><span>{user.email}</span><small>{user.role}</small></div>
-                  <Link href="#settings" onClick={() => setMenuOpen(false)}><Settings size={15} />Profile & settings</Link>
+                  <Link href="/profile" onClick={() => setMenuOpen(false)}><Settings size={15} />Profile & settings</Link>
                   <button className="signout-menu" onClick={() => { setMenuOpen(false); setSignoutOpen(true); }}><LogOut size={15} />Sign out</button>
                 </div>
               )}

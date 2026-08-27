@@ -27,6 +27,7 @@
 /backups/
 /storage/
 /outputs/
+/output/
 /tmp/
 
 # misc

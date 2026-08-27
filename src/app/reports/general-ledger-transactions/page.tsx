@@ -2,13 +2,14 @@ import Link from "next/link";
 import { Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { generalLedgerReport } from "@/lib/general-ledger-report";
+import { formatCurrencyAmount } from "@/lib/currency";
 import { requireActiveTenant } from "@/lib/session";
 import { journalSourceLabel } from "@/lib/journal-labels";
 
 export const dynamic = "force-dynamic";
 const parsed = (value: string | undefined, fallback: Date) => { const result = value ? new Date(`${value}T00:00:00.000Z`) : fallback; return Number.isNaN(result.getTime()) ? fallback : result; };
 const shown = (value: Date) => value.toLocaleDateString("en-GB", { timeZone: "UTC" });
-const money = (currency: string, value: { toString(): string }) => `${currency} ${Number(value.toString()).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = formatCurrencyAmount;
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; accountId?: string }> }) {
   const query = await searchParams;

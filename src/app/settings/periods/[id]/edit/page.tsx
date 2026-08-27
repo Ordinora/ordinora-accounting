@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
 import { requireActiveTenant } from "@/lib/session";
+import { assertCanAccessAdministrationFeature } from "@/lib/staff-access";
 import { updatePeriod } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user, tenants, active } = await requireActiveTenant();
+  assertCanAccessAdministrationFeature(user.staffRole, "periods");
   const period = await db.accountingPeriod.findFirst({ where: { id, tenantId: active.id }, include: { _count: { select: { journals: true, reports: true, payrollRuns: true, salesInvoices: true, supplierBills: true, salesCreditNotes: true, supplierCreditNotes: true, customerReceipts: true, supplierPayments: true, dailyCashRegisters: true, inventoryOperations: true } } } });
   if (!period) notFound();
   const used = Object.values(period._count).some((count) => count > 0);

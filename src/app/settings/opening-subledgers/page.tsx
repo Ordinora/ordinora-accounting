@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { openingControlBalance } from "@/lib/opening-control";
 import { openingControlPosition } from "@/lib/opening-subledgers";
 import { requireActiveTenant } from "@/lib/session";
+import { assertCanAccessAdministrationFeature } from "@/lib/staff-access";
 import { deleteOpeningDocument } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ const money = (code: string, value: Prisma.Decimal) => `${code} ${Number(value).
 
 export default async function Page() {
   const { user, tenants, active } = await requireActiveTenant();
+  assertCanAccessAdministrationFeature(user.staffRole, "opening-subledgers");
   const [opening, customers, suppliers, receivables, payables] = await Promise.all([
     db.journal.findFirst({ where: { tenantId: active.id, source: "OPENING_BALANCE", status: "POSTED" }, include: { lines: { include: { account: true } } }, orderBy: { accountingDate: "desc" } }),
     db.customer.findMany({ where: { tenantId: active.id, isActive: true }, orderBy: { name: "asc" } }),

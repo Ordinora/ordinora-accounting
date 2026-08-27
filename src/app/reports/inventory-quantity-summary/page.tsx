@@ -2,12 +2,13 @@ import Link from "next/link";
 import { Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { inventoryQuantityMovementSummary } from "@/lib/inventory-analysis";
+import { formatCurrencyAmount } from "@/lib/currency";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 const date = (value: string | undefined, fallback: Date) => { const parsed = value ? new Date(`${value}T00:00:00.000Z`) : fallback; return Number.isNaN(parsed.getTime()) ? fallback : parsed; };
 const shown = (value: Date) => value.toLocaleDateString("en-GB", { timeZone: "UTC" });
-const money = (currency: string, value: { toString(): string }) => `${currency} ${Number(value.toString()).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = formatCurrencyAmount;
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; asOf?: string }> }) {
   const query = await searchParams, { user, tenants, active } = await requireActiveTenant(), to = date(query.to??query.asOf, new Date()), from = date(query.from, new Date(Date.UTC(to.getUTCFullYear(),to.getUTCMonth(),1))), rows = await inventoryQuantityMovementSummary(active.id, from, to), fromKey=from.toISOString().slice(0,10),toKey = to.toISOString().slice(0, 10), key = `from=${fromKey}&to=${toKey}`;

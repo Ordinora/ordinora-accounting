@@ -7,4 +7,20 @@ describe("generateReportPdf", () => {
     expect(Buffer.from(pdf).subarray(0, 8).toString()).toBe("%PDF-1.4");
     expect(Buffer.from(pdf).toString()).toContain("/Type /Catalog");
   });
+
+  it("only creates another page when supplied rows overflow", () => {
+    const pdf = generateReportPdf({
+      company: "Seri Rasa Restaurant Sdn Bhd",
+      title: "Income Statement",
+      subtitle: "For the period 01/01/2026 to 26/08/2026 | Accrual accounting",
+      sections: Array.from({ length: 7 }, (_, index) => ({
+        title: `Section ${index + 1}`,
+        rows: [{ label: "Account", amount: "BND 100.00" }, { label: `Total Section ${index + 1}`, amount: "BND 100.00", strong: true }],
+      })),
+    });
+    const source = Buffer.from(pdf).toString("ascii");
+    expect(source).toContain("/Type /Pages /Count 1");
+    expect(source).toContain("Page 1 of 1");
+    expect(source).not.toContain("Page 2 of");
+  });
 });

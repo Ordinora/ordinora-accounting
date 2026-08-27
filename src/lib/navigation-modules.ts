@@ -5,7 +5,7 @@ export type NavigationModule = {
   links: { label: string; href: string; description: string }[];
 };
 
-import { canAccessModule } from "@/lib/staff-access";
+import { canAccessAdministrationFeature, canAccessModule } from "@/lib/staff-access";
 
 export const navigationModules: NavigationModule[] = [
   { key: "automation", label: "AI Accounting", description: "Document capture and assisted bookkeeping.", links: [
@@ -16,6 +16,7 @@ export const navigationModules: NavigationModule[] = [
     { label: "Sales quotations", href: "/sales/quotations", description: "Prepare quotes and convert accepted offers to invoices." },
     { label: "Sales orders", href: "/sales/orders", description: "Track confirmed customer orders before invoicing." },
     { label: "Sales invoices", href: "/sales", description: "Create and manage customer invoices." },
+    { label: "Receipts", href: "/receipts", description: "Record money received from customers." },
     { label: "Daily sales", href: "/cash-sales", description: "Post daily sales by cash, card, bank transfer, or other tender." },
     { label: "Sales credit notes", href: "/sales/credit-notes", description: "Credit items from an original sales invoice." },
   ] },
@@ -24,14 +25,13 @@ export const navigationModules: NavigationModule[] = [
     { label: "Supplier quotations", href: "/purchases/quotations", description: "Compare supplier offers for the same requirement." },
     { label: "Purchase orders", href: "/purchases/orders", description: "Approve purchases and track receipt before billing." },
     { label: "Purchase invoices", href: "/purchases", description: "Record and manage supplier invoices." },
+    { label: "Payments", href: "/payments", description: "Record direct payments and settle supplier invoices." },
     { label: "Supplier credit notes", href: "/purchases/credit-notes", description: "Credit items from an original purchase invoice." },
   ] },
   { key: "banking", label: "Banking & cash", description: "Cash movements, statements, and reconciliation.", links: [
     { label: "Bank & cash accounts", href: "/banking", description: "Review bank, cash, and petty-cash accounts." },
     { label: "Bank reconciliations", href: "/reconciliations", description: "Match the ledger with bank statements." },
     { label: "Statement imports", href: "/banking/imports", description: "Import and review bank statement transactions." },
-    { label: "Customer receipts", href: "/receipts", description: "Record money received from customers." },
-    { label: "Payments", href: "/payments", description: "Record payments and allocate them to accounts." },
     { label: "Inter-account transfers", href: "/transfers", description: "Move money between bank and cash accounts." },
   ] },
   { key: "accounting", label: "Accounting", description: "General ledger structure and manual journals.", links: [
@@ -85,5 +85,30 @@ export const navigationModules: NavigationModule[] = [
 ];
 
 export function navigationModulesForRole(role: string | null | undefined) {
-  return navigationModules.filter((module) => canAccessModule(role, module.key));
+  return navigationModules
+    .filter((module) => canAccessModule(role, module.key))
+    .map((module) => module.key !== "administration" ? module : {
+      ...module,
+      links: module.links.filter((link) => {
+        const feature = administrationFeatureForHref(link.href);
+        return feature ? canAccessAdministrationFeature(role, feature) : false;
+      }),
+    });
+}
+
+function administrationFeatureForHref(href: string) {
+  const features: Record<string, string> = {
+    "/settings/companies": "companies",
+    "/settings/staff": "staff",
+    "/settings/opening-balances": "opening-balances",
+    "/settings/opening-subledgers": "opening-subledgers",
+    "/settings/periods": "periods",
+    "/settings/currencies": "currencies",
+    "/settings/portal": "client-portal",
+    "/settings/portal/documents": "portal-documents",
+    "/settings/portal/questions": "client-questions",
+    "/settings/security/sessions": "active-sessions",
+    "/settings/security/mfa": "mfa",
+  };
+  return features[href];
 }

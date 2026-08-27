@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
-import { calculateSettlementValues, convertForeignToBase, normalizeCurrencyCode, realizedFxPosting, validateExchangeRate } from "./currency";
+import { calculateSettlementValues, convertForeignToBase, formatCurrencyAmount, normalizeCurrencyCode, realizedFxPosting, validateExchangeRate } from "./currency";
 
 describe("currency accounting", () => {
+  it("formats negative report values with parentheses", () => {
+    expect(formatCurrencyAmount("BND", new Prisma.Decimal("-6000"))).toBe("BND (6,000.00)");
+    expect(formatCurrencyAmount("BND", new Prisma.Decimal("6000"))).toBe("BND 6,000.00");
+    expect(formatCurrencyAmount("BND", 0)).toBe("BND 0.00");
+  });
   it("normalizes ISO-style codes", () => expect(normalizeCurrencyCode(" usd ")).toBe("USD"));
   it("rejects zero and negative rates", () => {
     expect(() => validateExchangeRate("0")).toThrow();

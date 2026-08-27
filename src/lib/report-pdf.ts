@@ -1,5 +1,5 @@
-type PdfRow = { label: string; detail?: string; amount?: string; strong?: boolean };
-export type PdfSection = { title: string; rows: PdfRow[] };
+type PdfRow = { label: string; detail?: string; amount?: string; strong?: boolean; final?: boolean };
+export type PdfSection = { title?: string; rows: PdfRow[] };
 export type ReportPdfInput = { company: string; title: string; subtitle: string; sections: PdfSection[] };
 
 const ascii = (value: string) => value.normalize("NFKD").replace(/[–—]/g, "-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[^\x20-\x7E]/g, "");
@@ -20,14 +20,19 @@ export function generateReportPdf(input: ReportPdfInput) {
   header();
   for (const section of input.sections) {
     if (y < 105) newPage();
-    page.push(text(section.title, 45, y, 12, true)); y -= 18;
+    if (section.title) {
+      page.push(text(section.title, 45, y, 12, true)); y -= 18;
+    }
     for (const row of section.rows) {
       if (y < 65) newPage();
       page.push(text(row.label, 58, y, 10, row.strong));
       if (row.detail) page.push(text(row.detail, 300, y, 9));
       if (row.amount) page.push(right(row.amount, y, row.strong));
       y -= row.strong ? 20 : 17;
-      if (row.strong) page.push(`0.35 w 55 ${y + 8} m 550 ${y + 8} l S`);
+      if (row.strong) {
+        page.push(`0.35 w 55 ${y + 12} m 550 ${y + 12} l S`);
+        if (row.final) page.push(`0.35 w 55 ${y + 9} m 550 ${y + 9} l S`);
+      }
     }
     y -= 9;
   }

@@ -143,7 +143,7 @@ async function deleteJournalSource(tx: Prisma.TransactionClient, tenantId: strin
   }
   if (source === "SALES_CREDIT_NOTE") { await tx.salesCreditNoteLine.deleteMany({ where: { creditNoteId: sourceId } }); await tx.salesCreditNote.deleteMany({ where: owned }); return; }
   if (source === "SUPPLIER_CREDIT_NOTE") { await tx.supplierCreditNoteLine.deleteMany({ where: { creditNoteId: sourceId } }); await tx.supplierCreditNote.deleteMany({ where: owned }); return; }
-  if (source === "CUSTOMER_RECEIPT") { await tx.salesInvoiceAllocation.deleteMany({ where: { receiptId: sourceId } }); await tx.customerReceipt.deleteMany({ where: owned }); return; }
+  if (source === "CUSTOMER_RECEIPT") { await tx.salesInvoiceAllocation.deleteMany({ where: { receiptId: sourceId } }); await tx.customerReceiptLine.deleteMany({ where: { receiptId: sourceId } }); await tx.customerReceipt.deleteMany({ where: owned }); return; }
   if (source === "SUPPLIER_PAYMENT") { await tx.supplierBillAllocation.deleteMany({ where: { paymentId: sourceId } }); await tx.supplierPayment.deleteMany({ where: owned }); return; }
   if (source === "PAYMENT") { await removeInventoryMovements(tx, tenantId, "Payment", sourceId); await tx.paymentLine.deleteMany({ where: { paymentId: sourceId } }); await tx.payment.deleteMany({ where: owned }); return; }
   if (source === "INTER_ACCOUNT_TRANSFER") { await tx.interAccountTransfer.deleteMany({ where: owned }); return; }

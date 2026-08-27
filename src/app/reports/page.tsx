@@ -12,6 +12,7 @@ const sections: ReportSection[] = [
   { name: "Financial statements", copy: "Core performance and financial-position reports.", Icon: BarChart3, reports: [
     { href: "/reports/profit-loss", name: "Profit & Loss", copy: "Revenue, expenses, and net profit for a selected period." },
     { href: "/reports/income-statement", name: "Income Statement", copy: "Income, expenses, and profit for a selected reporting period." },
+    { href: "/reports/revenue-statement", name: "Revenue Statement", copy: "Multi-step revenue, gross-profit, expenses, other income, and net income." },
     { href: "/reports/balance-sheet", name: "Balance Sheet", copy: "Assets, liabilities, equity, and current earnings." },
     { href: "/reports/cash-flow", name: "Cash Flow Statement", copy: "Operating, investing, and financing cash movements." },
     { href: "/reports/changes-in-equity", name: "Statement of Changes in Equity", copy: "Opening equity, owner movements, profit, and closing equity." },

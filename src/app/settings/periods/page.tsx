@@ -3,12 +3,14 @@ import { CalendarDays, Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
 import { requireActiveTenant } from "@/lib/session";
+import { assertCanAccessAdministrationFeature } from "@/lib/staff-access";
 import { changePeriodStatus, createPeriod } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const { user, tenants, active } = await requireActiveTenant();
+  assertCanAccessAdministrationFeature(user.staffRole, "periods");
   const periods = await db.accountingPeriod.findMany({
     where: { tenantId: active.id },
     include: { _count: { select: { journals: true, reports: true, payrollRuns: true, salesInvoices: true, supplierBills: true, salesCreditNotes: true, supplierCreditNotes: true, customerReceipts: true, supplierPayments: true, dailyCashRegisters: true, inventoryOperations: true } } },

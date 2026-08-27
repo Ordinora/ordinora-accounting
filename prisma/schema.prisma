@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
@@ -396,7 +396,7 @@ model Tenant {
   financialYearEndDay           Int
   defaultCurrency               String                   @default("BND")
   multiCurrencyEnabled          Boolean                  @default(false)
-  inventoryCostingMethod       InventoryCostingMethod   @default(WEIGHTED_AVERAGE)
+  inventoryCostingMethod        InventoryCostingMethod   @default(WEIGHTED_AVERAGE)
   baseCurrencyLockedAt          DateTime?
   taxStatus                     String?
   status                        TenantStatus             @default(ACTIVE)
@@ -843,6 +843,7 @@ model Account {
   paymentBankAccount            SupplierPayment[]
   directPaymentBankAccounts     Payment[]
   directPaymentLines            PaymentLine[]
+  directReceiptLines            CustomerReceiptLine[]
   transferSourceAccounts        InterAccountTransfer[]   @relation("TransferSourceAccount")
   transferDestinationAccounts   InterAccountTransfer[]   @relation("TransferDestinationAccount")
   bankReconciliations           BankReconciliation[]
@@ -1306,11 +1307,14 @@ model SupplierCreditNoteLine {
 model CustomerReceipt {
   id             String                   @id @default(cuid())
   tenantId       String
-  customerId     String
+  customerId     String?
   periodId       String
   bankAccountId  String
   reference      String
   receiptDate    DateTime                 @db.Date
+  payerType      String                   @default("CUSTOMER")
+  payerName      String?
+  description    String?
   currency       String
   exchangeRate   Decimal                  @db.Decimal(24, 12)
   foreignAmount  Decimal                  @db.Decimal(19, 4)
@@ -1320,13 +1324,30 @@ model CustomerReceipt {
   createdById    String
   postedAt       DateTime                 @default(now())
   tenant         Tenant                   @relation(fields: [tenantId], references: [id])
-  customer       Customer                 @relation(fields: [customerId], references: [id])
+  customer       Customer?                @relation(fields: [customerId], references: [id])
   period         AccountingPeriod         @relation(fields: [periodId], references: [id])
   bankAccount    Account                  @relation(fields: [bankAccountId], references: [id])
   allocations    SalesInvoiceAllocation[]
+  lines          CustomerReceiptLine[]
 
   @@unique([tenantId, reference])
   @@index([tenantId, receiptDate])
+}
+
+model CustomerReceiptLine {
+  id            String          @id @default(cuid())
+  receiptId     String
+  accountId     String
+  description   String
+  quantity      Decimal         @db.Decimal(19, 4)
+  unitPrice     Decimal         @db.Decimal(19, 4)
+  foreignAmount Decimal         @db.Decimal(19, 4)
+  baseAmount    Decimal         @db.Decimal(19, 4)
+  receipt       CustomerReceipt @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  account       Account         @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([receiptId])
+  @@index([accountId])
 }
 
 model SalesInvoiceAllocation {
@@ -1345,26 +1366,34 @@ model SalesInvoiceAllocation {
 }
 
 model SupplierPayment {
-  id             String                   @id @default(cuid())
-  tenantId       String
-  supplierId     String
-  periodId       String
-  bankAccountId  String
-  reference      String
-  paymentDate    DateTime                 @db.Date
-  currency       String
-  exchangeRate   Decimal                  @db.Decimal(24, 12)
-  foreignAmount  Decimal                  @db.Decimal(19, 4)
-  baseAmount     Decimal                  @db.Decimal(19, 4)
-  realizedFxBase Decimal                  @default(0) @db.Decimal(19, 4)
-  journalId      String?                  @unique
-  createdById    String
-  postedAt       DateTime                 @default(now())
-  tenant         Tenant                   @relation(fields: [tenantId], references: [id])
-  supplier       Supplier                 @relation(fields: [supplierId], references: [id])
-  period         AccountingPeriod         @relation(fields: [periodId], references: [id])
-  bankAccount    Account                  @relation(fields: [bankAccountId], references: [id])
-  allocations    SupplierBillAllocation[]
+  id                    String                   @id @default(cuid())
+  tenantId              String
+  supplierId            String
+  periodId              String
+  bankAccountId         String
+  reference             String
+  paymentDate           DateTime                 @db.Date
+  currency              String
+  exchangeRate          Decimal                  @db.Decimal(24, 12)
+  foreignAmount         Decimal                  @db.Decimal(19, 4)
+  baseAmount            Decimal                  @db.Decimal(19, 4)
+  realizedFxBase        Decimal                  @default(0) @db.Decimal(19, 4)
+  journalId             String?                  @unique
+  createdById           String
+  postedAt              DateTime                 @default(now())
+  paymentMethod         String                   @default("BANK_TRANSFER")
+  chequeNumber          String?
+  chequeDate            DateTime?                @db.Date
+  chequeStatus          String?
+  chequeClearedOn       DateTime?                @db.Date
+  chequeReturnedOn      DateTime?                @db.Date
+  chequeReturnReason    String?
+  chequeReturnJournalId String?
+  tenant                Tenant                   @relation(fields: [tenantId], references: [id])
+  supplier              Supplier                 @relation(fields: [supplierId], references: [id])
+  period                AccountingPeriod         @relation(fields: [periodId], references: [id])
+  bankAccount           Account                  @relation(fields: [bankAccountId], references: [id])
+  allocations           SupplierBillAllocation[]
 
   @@unique([tenantId, reference])
   @@index([tenantId, paymentDate])
@@ -1386,25 +1415,33 @@ model SupplierBillAllocation {
 }
 
 model Payment {
-  id            String           @id @default(cuid())
-  tenantId      String
-  periodId      String
-  bankAccountId String
-  reference     String
-  paymentDate   DateTime         @db.Date
-  payee         String
-  description   String?
-  currency      String
-  exchangeRate  Decimal          @db.Decimal(24, 12)
-  foreignAmount Decimal          @db.Decimal(19, 4)
-  baseAmount    Decimal          @db.Decimal(19, 4)
-  journalId     String?          @unique
-  createdById   String
-  postedAt      DateTime         @default(now())
-  tenant        Tenant           @relation(fields: [tenantId], references: [id])
-  period        AccountingPeriod @relation(fields: [periodId], references: [id])
-  bankAccount   Account          @relation(fields: [bankAccountId], references: [id])
-  lines         PaymentLine[]
+  id                    String           @id @default(cuid())
+  tenantId              String
+  periodId              String
+  bankAccountId         String
+  reference             String
+  paymentDate           DateTime         @db.Date
+  payee                 String
+  description           String?
+  currency              String
+  exchangeRate          Decimal          @db.Decimal(24, 12)
+  foreignAmount         Decimal          @db.Decimal(19, 4)
+  baseAmount            Decimal          @db.Decimal(19, 4)
+  journalId             String?          @unique
+  createdById           String
+  postedAt              DateTime         @default(now())
+  paymentMethod         String           @default("BANK_TRANSFER")
+  chequeNumber          String?
+  chequeDate            DateTime?        @db.Date
+  chequeStatus          String?
+  chequeClearedOn       DateTime?        @db.Date
+  chequeReturnedOn      DateTime?        @db.Date
+  chequeReturnReason    String?
+  chequeReturnJournalId String?
+  tenant                Tenant           @relation(fields: [tenantId], references: [id])
+  period                AccountingPeriod @relation(fields: [periodId], references: [id])
+  bankAccount           Account          @relation(fields: [bankAccountId], references: [id])
+  lines                 PaymentLine[]
 
   @@unique([tenantId, reference])
   @@index([tenantId, paymentDate])

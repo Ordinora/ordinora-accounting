@@ -16,7 +16,9 @@ const schema = z.object({
 });
 
 export type ContactCreateState = { error?: string };
-type ContactKind = "customer" | "supplier";
+export type ContactKind = "customer" | "supplier";
+export type QuickContact = { id: string; code: string; name: string; paymentTermsDays: number; currencyCode: string };
+export type QuickContactInput = { code: string; name: string; email: string; phone: string; address: string; paymentTermsDays: number };
 
 function authorize(role: string | null | undefined) { if (!role || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(role)) throw new Error("Your role cannot manage contacts."); }
 function label(kind: ContactKind) { return kind === "customer" ? "Customer" : "Supplier"; }
@@ -43,6 +45,22 @@ async function create(kind: ContactKind, _state: ContactCreateState, formData: F
 
 export async function createCustomer(state: ContactCreateState, formData: FormData) { return create("customer", state, formData); }
 export async function createSupplier(state: ContactCreateState, formData: FormData) { return create("supplier", state, formData); }
+
+export async function createQuickContact(kind: ContactKind, values: QuickContactInput): Promise<QuickContact> {
+  let submittedCode = "";
+  try {
+    const { user, active } = await requireActiveTenant(); authorize(user.staffRole);
+    const input = schema.parse(values); submittedCode = input.code;
+    const where = { tenantId: active.id, OR: [{ code: { equals: input.code, mode: "insensitive" as const } }, { name: { equals: input.name, mode: "insensitive" as const } }] };
+    const existing = kind === "customer" ? await db.customer.findFirst({ where }) : await db.supplier.findFirst({ where });
+    if (existing) throw new Error(existing.code.toLocaleLowerCase() === input.code.toLocaleLowerCase() ? `${label(kind)} code ${input.code} already exists.` : `${label(kind)} name “${input.name}” already exists.`);
+    const data = { tenantId: active.id, ...input, email: input.email || null, phone: input.phone || null, address: input.address || null };
+    const record = kind === "customer" ? await db.customer.create({ data }) : await db.supplier.create({ data });
+    await db.auditEvent.create({ data: { firmId: user.firmId, tenantId: active.id, actorId: user.id, actorKind: "STAFF", action: `${kind.toUpperCase()}_CREATED`, entityType: kind, entityId: record.id, newValues: { code: record.code, name: record.name, source: "QUICK_CREATE" } } });
+    revalidatePath(kind === "customer" ? "/sales/new" : "/purchases/new");
+    return { id: record.id, code: record.code, name: record.name, paymentTermsDays: record.paymentTermsDays, currencyCode: record.currencyCode };
+  } catch (error) { throw new Error(createError(error, kind, submittedCode)); }
+}
 
 async function update(kind: ContactKind, formData: FormData) {
   const { user, active } = await requireActiveTenant(); authorize(user.staffRole);

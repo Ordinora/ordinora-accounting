@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { calculateBalanceSheet } from "@/lib/financial-statements";
+import { balanceSheetPdfSections } from "@/lib/balance-sheet-report";
 import { cashFlowStatement, type CashFlowActivity } from "@/lib/cash-flow";
 import { bankAccountSummary, receiptsPaymentsSummary } from "@/lib/cash-account-reports";
 import { customerStatement, customerSummary } from "@/lib/customer-reports";
@@ -8,9 +9,12 @@ import { fixedAssetReportRows } from "@/lib/fixed-asset-reports";
 import { generalLedgerReport } from "@/lib/general-ledger-report";
 import { inventoryCostingWorksheet, inventoryProfitMargin, inventoryQuantityByLocation, inventoryQuantityMovementSummary } from "@/lib/inventory-analysis";
 import { generateReportPdf, type PdfSection } from "@/lib/report-pdf";
+import { calculateProfitLoss } from "@/lib/profit-loss";
+import { profitLossPdfSections } from "@/lib/profit-loss-report";
 import { employeePayrollSummary, payrollEntriesForPeriod, payrollEntryGross, payrollReportTotals, payslipItemSummary } from "@/lib/payroll-reports";
 import { agedPayables, agedReceivables, inventoryValuation, ledgerBalances } from "@/lib/reports";
 import { requireActiveTenant } from "@/lib/session";
+import { formatCurrencyAmount } from "@/lib/currency";
 import { salesByCustomer, salesByItem } from "@/lib/sales-reports";
 import { supplierStatement, supplierSummary } from "@/lib/supplier-reports";
 
@@ -25,7 +29,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
   const url = new URL(request.url), now = new Date();
   const asOf = parseDate(url.searchParams.get("asOf") ?? url.searchParams.get("to"), now);
   const from = parseDate(url.searchParams.get("from"), new Date(now.getFullYear(), 0, 1));
-  const amount = (value: Prisma.Decimal) => `${active.defaultCurrency} ${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const amount = (value: Prisma.Decimal) => formatCurrencyAmount(active.defaultCurrency, value);
   let title = "", subtitle = "", sections: PdfSection[] = [];
 
   if (type === "trial-balance") {
@@ -34,17 +38,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
     const debits = rows.reduce((sum, row) => sum.add(row.balance.gt(0) ? row.balance : zero), zero);
     const credits = rows.reduce((sum, row) => sum.add(row.balance.lt(0) ? row.balance.abs() : zero), zero);
     sections = [{ title: "Accounts", rows: [...rows.map((row) => ({ label: `${row.code}  ${row.name}`, detail: row.balance.gt(0) ? `Debit ${amount(row.balance)}` : "", amount: row.balance.lt(0) ? `Credit ${amount(row.balance.abs())}` : "" })), { label: "Total debits", amount: amount(debits), strong: true }, { label: "Total credits", amount: amount(credits), strong: true }, { label: "Difference", amount: amount(debits.sub(credits)), strong: true }] }];
-  } else if (type === "profit-loss" || type === "income-statement") {
-    title = type === "income-statement" ? "Income Statement" : "Profit & Loss"; subtitle = `For the period ${formatDate(from)} to ${formatDate(asOf)} | Accrual accounting`;
-    const rows = await ledgerBalances(active.id, from, asOf), income = rows.filter((row) => row.type === "REVENUE"), expenses = rows.filter((row) => row.type === "EXPENSE"); const revenue = income.reduce((sum, row) => sum.add(row.credit.sub(row.debit)), zero), expense = expenses.reduce((sum, row) => sum.add(row.debit.sub(row.credit)), zero); sections = [{ title: "Income", rows: [...income.map((row) => ({ label: `${row.code}  ${row.name}`, amount: amount(row.credit.sub(row.debit)) })), { label: "Total income", amount: amount(revenue), strong: true }] }, { title: "Expenses", rows: [...expenses.map((row) => ({ label: `${row.code}  ${row.name}`, amount: amount(row.debit.sub(row.credit)) })), { label: "Total expenses", amount: amount(expense), strong: true }, { label: "Net profit / (loss)", amount: amount(revenue.sub(expense)), strong: true }] }];
+  } else if (type === "profit-loss" || type === "income-statement" || type === "revenue-statement") {
+    title = type === "income-statement" ? "Income Statement" : type === "revenue-statement" ? "Revenue Statement" : "Profit & Loss"; subtitle = `For the period ${formatDate(from)} to ${formatDate(asOf)} | Accrual accounting`;
+    sections = profitLossPdfSections(calculateProfitLoss(await ledgerBalances(active.id, from, asOf)), amount);
   } else if (type === "balance-sheet") {
     title = "Balance Sheet"; subtitle = `As at ${formatDate(asOf)}`;
     const statement = calculateBalanceSheet(await ledgerBalances(active.id, undefined, asOf));
-    sections = [
-      { title: "Assets", rows: [...statement.assets.map((row) => ({ label: `${row.code}  ${row.name}`, amount: amount(row.balance) })), { label: "Total assets", amount: amount(statement.totalAssets), strong: true }] },
-      { title: "Liabilities", rows: [...statement.liabilities.map((row) => ({ label: `${row.code}  ${row.name}`, amount: amount(row.credit.sub(row.debit)) })), { label: "Total liabilities", amount: amount(statement.totalLiabilities), strong: true }] },
-      { title: "Equity", rows: [...statement.equity.map((row) => ({ label: `${row.code}  ${row.name}`, amount: amount(row.credit.sub(row.debit)) })), { label: "Current earnings", amount: amount(statement.currentEarnings) }, { label: "Total equity", amount: amount(statement.totalEquity), strong: true }, { label: "Total liabilities & equity", amount: amount(statement.totalLiabilitiesAndEquity), strong: true }] }
-    ];
+    sections = balanceSheetPdfSections(statement, amount);
   } else if (type === "cash-flow") {
     title = "Cash Flow Statement"; subtitle = `For the period ${formatDate(from)} to ${formatDate(asOf)} | Direct method`;
     const statement = await cashFlowStatement(active.id, from, asOf), names: Record<CashFlowActivity,string> = { OPERATING:"Operating activities", INVESTING:"Investing activities", FINANCING:"Financing activities" };
@@ -129,6 +129,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
     sections = rows.map(row => ({ title: `${row.employeeNumber}  ${row.fullName}`, rows: [{ label: "Basic pay", amount: amount(row.basicPay) }, { label: "Overtime", amount: amount(row.overtime) }, { label: "Allowances", amount: amount(row.allowances) }, { label: "Bonuses", amount: amount(row.bonuses) }, { label: "Unused leave payout", amount: amount(row.leavePayout) }, { label: "Gratuity / severance", amount: amount(row.gratuity) }, { label: "Other earnings", amount: amount(row.otherEarnings) }, { label: "Employee SPK", amount: amount(row.employeeSpk) }, { label: "Other deductions", amount: amount(row.otherDeductions) }, { label: "Employer SPK", amount: amount(row.employerSpk) }, { label: "Net pay", amount: amount(row.netPay), strong: true }] }));
   } else return new Response("Report not found", { status: 404 });
 
-  const pdf = generateReportPdf({ company: active.legalName, title, subtitle: `${subtitle} | Base currency ${active.defaultCurrency}`, sections });
+  const pdf = generateReportPdf({ company: active.legalName, title, subtitle, sections });
   return new Response(pdf, { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${type}-${asOf.toISOString().slice(0, 10)}.pdf"`, "Cache-Control": "private, no-store" } });
 }

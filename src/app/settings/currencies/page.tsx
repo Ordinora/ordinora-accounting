@@ -1,11 +1,13 @@
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
 import { requireActiveTenant } from "@/lib/session";
+import { assertCanAccessAdministrationFeature } from "@/lib/staff-access";
 import { addCurrency, enableMulticurrency, saveExchangeRate } from "./actions";
 
 export const dynamic = "force-dynamic";
 export default async function CurrencySettingsPage() {
   const { user, tenants, active } = await requireActiveTenant();
+  assertCanAccessAdministrationFeature(user.staffRole, "currencies");
   const [currencies, rates] = await Promise.all([
     db.tenantCurrency.findMany({ where: { tenantId: active.id }, orderBy: { code: "asc" } }),
     db.exchangeRate.findMany({ where: { tenantId: active.id }, orderBy: [{ effectiveOn: "desc" }, { currencyCode: "asc" }], take: 100 }),

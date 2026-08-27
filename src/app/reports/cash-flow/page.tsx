@@ -2,12 +2,13 @@ import Link from "next/link";
 import { Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { cashFlowStatement, type CashFlowActivity } from "@/lib/cash-flow";
+import { formatCurrencyAmount } from "@/lib/currency";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 const parsed = (value: string | undefined, fallback: Date) => value ? new Date(`${value}T00:00:00.000Z`) : fallback;
 const displayedDate = (value: Date) => value.toLocaleDateString("en-BN", { timeZone: "UTC" });
-const money = (currency: string, value: unknown) => `${currency} ${Number(value).toLocaleString("en-BN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = formatCurrencyAmount;
 const activityName: Record<CashFlowActivity, string> = { OPERATING: "Operating activities", INVESTING: "Investing activities", FINANCING: "Financing activities" };
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {

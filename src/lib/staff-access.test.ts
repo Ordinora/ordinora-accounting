@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { canAccessModule, isSystemAdministrator } from "./staff-access";
+import { canAccessAdministrationFeature, canAccessModule, isSystemAdministrator } from "./staff-access";
 
 describe("staff access policy", () => {
-  it("allows accountants to perform payroll work but not administration", () => {
+  it("allows accountants to perform payroll and assigned administration work", () => {
     expect(canAccessModule("ACCOUNTANT", "payroll")).toBe(true);
-    expect(canAccessModule("ACCOUNTANT", "administration")).toBe(false);
+    expect(canAccessModule("ACCOUNTANT", "administration")).toBe(true);
+    expect(canAccessAdministrationFeature("ACCOUNTANT", "opening-balances")).toBe(true);
+    expect(canAccessAdministrationFeature("ACCOUNTANT", "client-questions")).toBe(true);
+    expect(canAccessAdministrationFeature("ACCOUNTANT", "companies")).toBe(false);
+    expect(canAccessAdministrationFeature("ACCOUNTANT", "active-sessions")).toBe(false);
+    expect(canAccessAdministrationFeature("ACCOUNTANT", "mfa")).toBe(false);
   });
 
   it("keeps security administration exclusive to the system administrator", () => {
