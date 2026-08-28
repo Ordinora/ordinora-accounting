@@ -1,15 +1,19 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { AutoReferenceField } from "@/components/auto-reference-field";
 import { QuickInventoryItemButton, type InventoryMappingAccount } from "@/components/quick-inventory-item";
 import { QuickContactButton } from "@/components/quick-contact";
 type Party={id:string;code:string;name:string;paymentTermsDays:number;currencyCode:string};type Account={id:string;code:string;name:string;type:string};type Item={id:string;sku:string;name:string;revenueAccountId:string;inventoryAccountId:string};type Location={id:string;code:string;name:string};type Line={id:number;description:string;accountId:string;itemId:string;locationId:string;quantity:string;unitPrice:string;discountPercent:string};
 const empty=(id:number):Line=>({id,description:"",accountId:"",itemId:"",locationId:"",quantity:"1",unitPrice:"",discountPercent:"0"});
-export function CommercialForm({kind,action:submitAction,parties:initialParties,accounts,items:initialItems,locations,mappingAccounts}:{kind:"sale"|"purchase";action:(state:{error?:string},data:FormData)=>Promise<{error?:string}>;parties:Party[];accounts:Account[];items:Item[];locations:Location[];mappingAccounts:InventoryMappingAccount[]}){
+type CommercialFormState={error?:string;redirectTo?:string};
+export function CommercialForm({kind,action:submitAction,parties:initialParties,accounts,items:initialItems,locations,mappingAccounts}:{kind:"sale"|"purchase";action:(state:CommercialFormState,data:FormData)=>Promise<CommercialFormState>;parties:Party[];accounts:Account[];items:Item[];locations:Location[];mappingAccounts:InventoryMappingAccount[]}){
+ const router=useRouter();
  const isSale=kind==="sale",today=new Date().toISOString().slice(0,10),[partyId,setPartyId]=useState(""),[parties,setParties]=useState(initialParties),[lines,setLines]=useState<Line[]>([empty(1)]),[items,setItems]=useState(initialItems),[quickLineId,setQuickLineId]=useState(1),currency=parties.find(p=>p.id===partyId)?.currencyCode??"BND";
  const [state,action]=useActionState(submitAction,{});
+ useEffect(()=>{if(!state.redirectTo)return;router.replace(state.redirectTo);router.refresh()},[router,state.redirectTo]);
  const amount=(l:Line)=>(Number(l.quantity)||0)*(Number(l.unitPrice)||0)*(1-(Number(l.discountPercent)||0)/100),total=useMemo(()=>lines.reduce((s,l)=>s+amount(l),0),[lines]),update=(id:number,field:keyof Omit<Line,"id">,value:string)=>setLines(v=>v.map(l=>l.id===id?{...l,[field]:value}:l));
  if(state.error)return <div className="form-panel"><div className="form-error" role="alert">{state.error}</div><div className="form-actions"><button type="button" className="button-secondary" onClick={()=>window.location.reload()}>Return to invoice</button></div></div>;
  return <form action={action} className="form-panel"><section className="form-section"><div className="section-heading"><h2>{isSale?"Sales invoice":"Supplier bill"}</h2><p>Use an inventory item for stock-managed lines, or a ledger account for ordinary lines. The document date selects the accounting period automatically.</p></div><div className="form-grid">

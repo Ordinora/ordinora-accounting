@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 import { db } from "./db";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
+const DEFAULT_MAX_WAIT_MS = 10_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 function isRetryableSerializationFailure(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
@@ -23,6 +25,8 @@ export async function runSerializableTransaction<T>(
     try {
       return await db.$transaction(operation, {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: DEFAULT_MAX_WAIT_MS,
+        timeout: DEFAULT_TIMEOUT_MS,
       });
     } catch (error) {
       if (isDuplicateReference(error)) throw new Error("A transaction with this reference already exists.");
