@@ -339,6 +339,7 @@ model User {
   loginAttempts                   LoginAttempt[]
   mfaChallenges                   MfaChallenge[]
   createdPayrollRuns              PayrollRun[]
+  createdOpeningPayrollYtd        OpeningPayrollYtd[]     @relation("OpeningPayrollYtdCreator")
   completedMonthEndChecklistItems MonthEndChecklistItem[] @relation("MonthEndChecklistCompleter")
   createdSalesQuotations          SalesQuotation[]        @relation("SalesQuotationCreator")
   createdSalesOrders              SalesOrder[]            @relation("SalesOrderCreator")
@@ -460,6 +461,7 @@ model Tenant {
   fixedAssetDisposals           FixedAssetDisposal[]
   payrollSettlements            PayrollSettlement[]
   monthEndChecklistItems        MonthEndChecklistItem[]
+  openingPayrollYtd             OpeningPayrollYtd[]
   referenceSequences            ReferenceSequence[]
 
   @@unique([firmId, legalName])
@@ -727,25 +729,26 @@ model ReferenceSequence {
 }
 
 model Employee {
-  id                   String         @id @default(cuid())
+  id                   String             @id @default(cuid())
   tenantId             String
   employeeNumber       String
   fullName             String
   identityReference    String?
   citizenship          String
   identityCardCategory String?
-  schemeEligible       Boolean        @default(true)
-  payFrequency         PayFrequency   @default(MONTHLY)
-  basicSalary          Decimal        @db.Decimal(19, 4)
-  hourlyRate           Decimal?       @db.Decimal(19, 4)
+  schemeEligible       Boolean            @default(true)
+  payFrequency         PayFrequency       @default(MONTHLY)
+  basicSalary          Decimal            @db.Decimal(19, 4)
+  hourlyRate           Decimal?           @db.Decimal(19, 4)
   department           String?
-  employmentStart      DateTime       @db.Date
-  employmentEnd        DateTime?      @db.Date
-  status               EmployeeStatus @default(ACTIVE)
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  tenant               Tenant         @relation(fields: [tenantId], references: [id])
+  employmentStart      DateTime           @db.Date
+  employmentEnd        DateTime?          @db.Date
+  status               EmployeeStatus     @default(ACTIVE)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  tenant               Tenant             @relation(fields: [tenantId], references: [id])
   payrollEntries       PayrollEntry[]
+  openingPayrollYtd    OpeningPayrollYtd?
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId, status, fullName])
@@ -817,6 +820,33 @@ model PayrollEntry {
 
   @@unique([payrollRunId, employeeId])
   @@index([employeeId])
+}
+
+model OpeningPayrollYtd {
+  id              String   @id @default(cuid())
+  tenantId        String
+  employeeId      String   @unique
+  asOfDate        DateTime @db.Date
+  basicPay        Decimal  @default(0) @db.Decimal(19, 4)
+  overtime        Decimal  @default(0) @db.Decimal(19, 4)
+  allowances      Decimal  @default(0) @db.Decimal(19, 4)
+  bonuses         Decimal  @default(0) @db.Decimal(19, 4)
+  leavePayout     Decimal  @default(0) @db.Decimal(19, 4)
+  gratuity        Decimal  @default(0) @db.Decimal(19, 4)
+  otherEarnings   Decimal  @default(0) @db.Decimal(19, 4)
+  otherDeductions Decimal  @default(0) @db.Decimal(19, 4)
+  employeeSpk     Decimal  @default(0) @db.Decimal(19, 4)
+  employerSpk     Decimal  @default(0) @db.Decimal(19, 4)
+  grossPay        Decimal  @db.Decimal(19, 4)
+  netPay          Decimal  @db.Decimal(19, 4)
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdBy       User     @relation("OpeningPayrollYtdCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, asOfDate])
 }
 
 model PayrollSettlement {

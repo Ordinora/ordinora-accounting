@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   BarChart3, BookOpen, ChevronDown, Landmark, LayoutDashboard, LogOut, Menu,
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { logout, selectTenant } from "@/app/actions";
 import { navigationModulesForRole, type NavigationModule } from "@/lib/navigation-modules";
+import { TransactionNotification } from "@/components/transaction-notification";
 
 type TenantOption = { id: string; legalName: string };
 type ShellUser = { displayName: string; email: string; role: string; firmName: string };
@@ -55,6 +56,7 @@ export function AppShell({
 
   return (
     <div className="omps-shell">
+      <Suspense fallback={null}><TransactionNotification /></Suspense>
       {drawerOpen && <button className="drawer-backdrop" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} />}
       <aside className={`omps-sidebar ${drawerOpen ? "drawer-open" : ""}`}>
         <div className="sidebar-brand">

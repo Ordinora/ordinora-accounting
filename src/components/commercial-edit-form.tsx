@@ -22,8 +22,7 @@ export function CommercialEditForm({ kind, action: submitAction, document: initi
   const [lines, setLines] = useState<Line[]>(initialDocument.lines.map((line, index) => ({ ...line, id: index + 1 })));
   const [items, setItems] = useState(initialItems);
   const [quickLineId, setQuickLineId] = useState(1);
-  const [discountType, setDiscountType] = useState(initialDocument.discountType);
-  const [discountValue, setDiscountValue] = useState(initialDocument.discountValue);
+  const [documentDiscountInput, setDocumentDiscountInput] = useState(initialDocument.discountType === "PERCENT" ? `${initialDocument.discountValue}%` : initialDocument.discountType === "AMOUNT" ? initialDocument.discountValue : "");
   const [expanded, setExpanded] = useState(false);
   const disabled = linked > 0 || sourceLocked;
 
@@ -33,8 +32,9 @@ export function CommercialEditForm({ kind, action: submitAction, document: initi
   const update = (id: number, field: keyof Omit<Line, "id">, value: string) => setLines((current) => current.map((line) => line.id === id ? { ...line, [field]: value } : line));
   const amount = (line: Line) => (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0) * (1 - (Number(line.discountPercent) || 0) / 100);
   const subtotal = lines.reduce((sum, line) => sum + amount(line), 0);
-  const discountInput = Math.max(Number(discountValue) || 0, 0);
-  const documentDiscount = discountType === "PERCENT" ? subtotal * discountInput / 100 : discountType === "AMOUNT" ? discountInput : 0;
+  const normalizedDiscount = documentDiscountInput.trim().replace(/^\$\s*/, "").replaceAll(",", "");
+  const discountNumber = Math.max(Number(normalizedDiscount.replace(/%$/, "").trim()) || 0, 0);
+  const documentDiscount = normalizedDiscount.endsWith("%") ? subtotal * discountNumber / 100 : discountNumber;
   const total = Math.max(subtotal - documentDiscount, 0);
 
   return <form action={formAction} className="form-panel">
@@ -52,7 +52,7 @@ export function CommercialEditForm({ kind, action: submitAction, document: initi
       <QuickInventoryItemButton accounts={mappingAccounts} onCreated={(item) => { setItems((current) => [...current, item]); setLines((current) => current.map((line) => line.id === quickLineId ? { ...line, itemId: item.id, accountId: isSale ? item.revenueAccountId : item.inventoryAccountId, description: line.description || item.name } : line)); }}/>
       <button type="button" className="button-secondary" disabled={disabled} onClick={() => setLines((current) => { const id = Math.max(0, ...current.map((line) => line.id)) + 1; setQuickLineId(id); return [...current, emptyLine(id)]; })}><Plus size={15}/>Add line</button>
     </div></div>
-    <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Description</th><th>Inventory item (optional)</th><th>Location</th><th>Ledger account</th><th>Qty</th><th>Unit price</th><th>Line discount %</th><th>Net amount</th><th/></tr></thead><tbody>{lines.map((line) => <tr key={line.id} onFocus={() => setQuickLineId(line.id)}>
+    <div className="data-table-wrap"><table className="data-table commercial-line-table"><thead><tr><th>Description</th><th>Inventory item (optional)</th><th>Location</th><th>Ledger account</th><th>Qty</th><th>Unit price</th><th>Line discount %</th><th>Net amount</th><th/></tr></thead><tbody>{lines.map((line) => <tr key={line.id} onFocus={() => setQuickLineId(line.id)}>
       <td><input name="lineDescription" value={line.description} onChange={(event) => update(line.id, "description", event.target.value)} required disabled={disabled}/></td>
       <td><select name="lineItemId" value={line.itemId} disabled={disabled} onChange={(event) => { const item = items.find((candidate) => candidate.id === event.target.value); setLines((current) => current.map((candidate) => candidate.id === line.id ? { ...candidate, itemId: event.target.value, accountId: item ? (isSale ? item.revenueAccountId : item.inventoryAccountId) : candidate.accountId, description: item?.name || candidate.description } : candidate)); }}><option value="">Non-inventory line</option>{items.map((item) => <option key={item.id} value={item.id}>{item.sku} — {item.name}</option>)}</select></td>
       <td><select name="lineLocationId" value={line.locationId} onChange={(event) => update(line.id, "locationId", event.target.value)} disabled={disabled || !line.itemId} required={!!line.itemId}><option value="">Select location</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.code} — {location.name}</option>)}</select>{(!line.itemId || disabled) && <input type="hidden" name="lineLocationId" value={line.locationId}/>}</td>
@@ -62,7 +62,7 @@ export function CommercialEditForm({ kind, action: submitAction, document: initi
       <td><input name="lineDiscountPercent" type="number" min="0" max="100" step="0.01" value={line.discountPercent} onChange={(event) => update(line.id, "discountPercent", event.target.value)} required disabled={disabled}/></td>
       <td>{initialDocument.currency} {amount(line).toFixed(2)}</td><td><button type="button" className="line-delete" disabled={disabled || lines.length === 1} onClick={() => setLines((current) => current.filter((candidate) => candidate.id !== line.id))}><Trash2 size={16}/></button></td>
     </tr>)}</tbody></table></div>
-    <div className="document-discount"><label>Document discount type<select name="discountType" value={discountType} disabled={disabled} onChange={(event) => { setDiscountType(event.target.value as typeof discountType); setDiscountValue("0"); }}><option value="NONE">No document discount</option><option value="AMOUNT">Fixed amount</option><option value="PERCENT">Percentage</option></select></label><label>{discountType === "PERCENT" ? "Discount percentage" : `Discount amount (${initialDocument.currency})`}<input name="discountValue" type="number" min="0" max={discountType === "PERCENT" ? 100 : undefined} step="0.01" value={discountValue} disabled={disabled || discountType === "NONE"} onChange={(event) => setDiscountValue(event.target.value)} required={discountType !== "NONE"}/></label></div>
+    <div className="document-discount smart-document-discount"><label>Document discount<input name="discountInput" type="text" inputMode="decimal" placeholder="5% or 100.00" value={documentDiscountInput} disabled={disabled} onChange={(event) => setDocumentDiscountInput(event.target.value)}/></label></div>
     <div className="document-total document-total-breakdown"><span>Lines <strong>{lines.length}</strong></span><span>Subtotal <strong>{initialDocument.currency} {subtotal.toFixed(2)}</strong></span><span>Discount <strong>− {initialDocument.currency} {documentDiscount.toFixed(2)}</strong></span><span className="grand-total">Net amount <strong>{initialDocument.currency} {total.toFixed(2)}</strong></span></div>
     {expanded && <div className="subwindow-submit"><button type="button" className="button-secondary" onClick={() => setExpanded(false)}>Cancel</button><button className="button-primary" disabled={disabled || pending}><Save size={15}/>{pending ? "Saving…" : "Save update"}</button></div>}
     </section>

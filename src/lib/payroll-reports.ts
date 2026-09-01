@@ -4,17 +4,14 @@ import { db } from "@/lib/db";
 const zero = new Prisma.Decimal(0);
 
 export async function payrollEntriesForPeriod(tenantId: string, from: Date, to: Date) {
-  return db.payrollEntry.findMany({
-    where: {
-      payrollRun: {
-        tenantId,
-        status: { in: ["POSTED", "LOCKED"] },
-        payDate: { gte: from, lte: to },
-      },
-    },
-    include: { employee: true, payrollRun: true },
-    orderBy: [{ payrollRun: { payDate: "asc" } }, { employee: { fullName: "asc" } }],
-  });
+  const [entries, opening] = await Promise.all([
+    db.payrollEntry.findMany({ where: { payrollRun: { tenantId, status: { in: ["POSTED", "LOCKED"] }, payDate: { gte: from, lte: to } } }, include: { employee: true, payrollRun: true }, orderBy: [{ payrollRun: { payDate: "asc" } }, { employee: { fullName: "asc" } }] }),
+    db.openingPayrollYtd.findMany({ where: { tenantId, asOfDate: { gte: from, lte: to } }, include: { employee: true }, orderBy: [{ asOfDate: "asc" }, { employee: { fullName: "asc" } }] }),
+  ]);
+  return [
+    ...entries.map((entry) => ({ ...entry, reportDate: entry.payrollRun.payDate, reportReference: entry.payrollRun.reference, reportType: entry.payrollRun.runType.replaceAll("_", " "), reportRunId: entry.payrollRun.id as string | null, isOpeningYtd: false })),
+    ...opening.map((entry) => ({ ...entry, payrollRunId: null, reportDate: entry.asOfDate, reportReference: "Opening YTD", reportType: "OPENING YTD", reportRunId: null as string | null, isOpeningYtd: true })),
+  ].sort((a, b) => a.reportDate.getTime() - b.reportDate.getTime() || a.employee.fullName.localeCompare(b.employee.fullName));
 }
 
 export function payrollEntryGross(entry: {

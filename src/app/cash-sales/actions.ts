@@ -5,6 +5,7 @@ import { z } from "zod";
 import { postDailySale, updateDailySale } from "@/lib/daily-sales";
 import { requireActiveTenant } from "@/lib/session";
 import { resolveReference } from "@/lib/reference-numbers";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 
 const header = z.object({ reference: z.string().trim().max(40).default(""), autoReference:z.string().optional(), registerDate: z.coerce.date(), branchLabel: z.string().trim().min(1).max(80), registerLabel: z.string().trim().max(80) });
 
@@ -23,7 +24,7 @@ export async function postCashSales(formData: FormData) {
   const { user, active } = await requireActiveTenant();
   const values=saleValues(formData),reference=await resolveReference({tenantId:active.id,kind:"DAILY_SALE",date:values.registerDate,supplied:values.reference,auto:values.autoReference==="true"});
   await postDailySale({ actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, reference,registerDate:values.registerDate,branchLabel:values.branchLabel,registerLabel:values.registerLabel,lines:values.lines,tenders:values.tenders });
-  redirect("/cash-sales");
+  redirect(withTransactionNotice("/cash-sales", "cash-sale"));
 }
 
 export async function updateCashSales(formData: FormData) {

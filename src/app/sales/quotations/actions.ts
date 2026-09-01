@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { resolveReference } from "@/lib/reference-numbers";
 import { calculateQuotationLines, assertQuotationTransition } from "@/lib/sales-quotation";
 import { requireActiveTenant } from "@/lib/session";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 
 const header = z.object({
   customerId: z.string().cuid(), reference: z.string().trim().max(60).optional(), autoReference: z.string().optional(),
@@ -91,7 +92,7 @@ export async function convertSalesQuotation(formData: FormData) {
     await db.salesQuotation.updateMany({ where: { id, tenantId: active.id, status: "CONVERTED", convertedInvoice: null }, data: { status: "ACCEPTED", convertedAt: null } });
     throw error;
   }
-  redirect(`/sales/${invoiceId}/edit`);
+  redirect(withTransactionNotice(`/sales/${invoiceId}/edit`, "sales-invoice"));
 }
 
 export async function deleteSalesQuotation(formData: FormData) {

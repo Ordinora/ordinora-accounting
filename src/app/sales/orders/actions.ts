@@ -11,6 +11,7 @@ import { resolveReference } from "@/lib/reference-numbers";
 import { assertSalesOrderTransition } from "@/lib/sales-order";
 import { calculateQuotationLines } from "@/lib/sales-quotation";
 import { requireActiveTenant } from "@/lib/session";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 
 const header = z.object({ customerId: z.string().cuid(), reference: z.string().trim().max(60).optional(), autoReference: z.string().optional(), quoteDate: z.coerce.date(), validUntil: z.coerce.date(), description: z.string().trim().min(2).max(500) });
 function authorize(role: string | null | undefined) { if (!role || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(role)) throw new Error("Your role cannot manage sales orders."); }
@@ -52,7 +53,7 @@ export async function convertSalesOrderToInvoice(formData: FormData) {
   const { user, active } = await requireActiveTenant(); authorize(user.staffRole); const id = z.string().cuid().parse(formData.get("id")); const invoiceDate = z.coerce.date().parse(formData.get("invoiceDate")); const dueDate = z.coerce.date().parse(formData.get("dueDate")); if (dueDate < invoiceDate) throw new Error("Invoice due date cannot be before the invoice date."); const claimed = await db.salesOrder.updateMany({ where: { id, tenantId: active.id, status: "READY_TO_INVOICE", convertedInvoice: null }, data: { status: "CONVERTED", convertedAt: new Date() } }); if (claimed.count !== 1) throw new Error("Only a ready, unconverted sales order can be invoiced."); let invoiceId: string;
   try { const order = await db.salesOrder.findUniqueOrThrow({ where: { id }, include: { lines: true } }); const reference = await resolveReference({ tenantId: active.id, kind: "SALES_INVOICE", date: invoiceDate, auto: true }); const invoice = await postCommercialDocument({ kind: "SALE", actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, partyId: order.customerId, reference, documentDate: invoiceDate, dueDate, description: order.description || `Converted from sales order ${order.reference}`, lines: order.lines.map((line) => ({ description: line.description, accountId: line.revenueAccountId, quantity: line.quantity.toString(), unitPrice: line.unitPrice.toString(), discountPercent: line.discountPercent.toString(), itemId: line.inventoryItemId || undefined, locationId: line.inventoryLocationId || undefined })) }); await db.salesInvoice.update({ where: { id: invoice.id }, data: { salesOrderId: id } }); invoiceId = invoice.id; await db.auditEvent.create({ data: { firmId: user.firmId, tenantId: active.id, actorId: user.id, actorKind: "STAFF", action: "SALES_ORDER_CONVERTED_TO_INVOICE", entityType: "SalesOrder", entityId: id, newValues: { invoiceId, invoiceReference: reference } } }); }
   catch (error) { await db.salesOrder.updateMany({ where: { id, tenantId: active.id, status: "CONVERTED", convertedInvoice: null }, data: { status: "READY_TO_INVOICE", convertedAt: null } }); throw error; }
-  redirect(`/sales/${invoiceId}/edit`);
+  redirect(withTransactionNotice(`/sales/${invoiceId}/edit`, "sales-invoice"));
 }
 
 export async function deleteSalesOrder(formData: FormData) {

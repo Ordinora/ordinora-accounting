@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { calculateFixedAssetDisposal } from "@/lib/fixed-asset-disposal";
 import { calculateFixedAssetBookValue } from "@/lib/fixed-assets";
 import { requireActiveTenant } from "@/lib/session";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 
 const schema = z.object({
   fixedAssetId: z.string().min(1),
@@ -69,5 +70,5 @@ export async function postFixedAssetDisposal(formData: FormData) {
     const message = error instanceof Error && !error.message.includes("Invalid `") ? error.message : "The disposal could not be posted. Review the asset and account selections, then try again.";
     redirect(`/fixed-assets/disposals/new?asset=${encodeURIComponent(input.fixedAssetId)}&error=${encodeURIComponent(message)}`);
   }
-  redirect("/fixed-assets/disposals");
+  redirect(withTransactionNotice("/fixed-assets/disposals", "fixed-asset-disposal"));
 }

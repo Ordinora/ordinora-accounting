@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./db";
 import { isSessionActive, SESSION_ABSOLUTE_LENGTH_MS, shouldTouchSession } from "./session-policy";
+import { requiresStaffMfaEnrollment } from "./staff-mfa-policy";
 
 const SESSION_COOKIE = "ordinora_session";
 const ACTIVE_TENANT_COOKIE = "ordinora_tenant";
@@ -97,9 +98,10 @@ export async function requireClientFinancialAccess() {
   return user;
 }
 
-export async function requireStaff() {
+export async function requireStaff(options: { allowMfaEnrollment?: boolean } = {}) {
   const user = await getCurrentStaff();
   if (!user) redirect("/login");
+  if (!options.allowMfaEnrollment && requiresStaffMfaEnrollment(user)) redirect("/settings/security/mfa");
   return user;
 }
 

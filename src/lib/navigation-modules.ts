@@ -72,8 +72,10 @@ export const navigationModules: NavigationModule[] = [
   { key: "administration", label: "Administration", description: "Company, period, currency, and portal settings.", links: [
     { label: "Companies", href: "/settings/companies", description: "Create and manage client companies." },
     { label: "Accounting staff", href: "/settings/staff", description: "Create staff accounts and limit them to assigned companies." },
+    { label: "Opening setup checklist", href: "/settings/opening-checklist", description: "Review completion of all opening-data registers." },
     { label: "Opening balances", href: "/settings/opening-balances", description: "Post the opening general-ledger position." },
     { label: "Opening receivables & payables", href: "/settings/opening-subledgers", description: "Allocate opening balances to customers and suppliers." },
+    { label: "Opening payroll YTD", href: "/settings/opening-payroll", description: "Bring forward employee payroll totals at conversion." },
     { label: "Accounting periods", href: "/settings/periods", description: "Create, open, close, and edit financial periods." },
     { label: "Currency settings", href: "/settings/currencies", description: "Configure base and foreign currencies." },
     { label: "Client portal", href: "/settings/portal", description: "Control client access and live-report permissions." },
@@ -100,8 +102,10 @@ function administrationFeatureForHref(href: string) {
   const features: Record<string, string> = {
     "/settings/companies": "companies",
     "/settings/staff": "staff",
+    "/settings/opening-checklist": "opening-checklist",
     "/settings/opening-balances": "opening-balances",
     "/settings/opening-subledgers": "opening-subledgers",
+    "/settings/opening-payroll": "opening-payroll",
     "/settings/periods": "periods",
     "/settings/currencies": "currencies",
     "/settings/portal": "client-portal",

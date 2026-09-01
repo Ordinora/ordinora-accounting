@@ -4,13 +4,15 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { postCommercialDocument } from "@/lib/commercial";
+import { parseCommercialDiscount } from "@/lib/commercial-discount";
 import { updateCommercialDocument } from "@/lib/commercial-update";
 import { resolveReference } from "@/lib/reference-numbers";
 import { requireActiveTenant } from "@/lib/session";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 
-const header = z.object({ partyId: z.string().min(1), reference: z.string().trim().max(40).default(""), autoReference: z.string().optional(), documentDate: z.coerce.date(), dueDate: z.coerce.date(), description: z.string().trim().min(2).max(240), discountType: z.enum(["NONE", "PERCENT", "AMOUNT"]).default("NONE"), discountValue: z.string().trim().default("0") });
+const header = z.object({ partyId: z.string().min(1), reference: z.string().trim().max(40).default(""), autoReference: z.string().optional(), documentDate: z.coerce.date(), dueDate: z.coerce.date(), description: z.string().trim().min(2).max(240), discountInput: z.string().trim().max(32).default("") });
 const line = z.object({ description: z.string().trim().min(1).max(240), accountId: z.string().min(1), quantity: z.string().regex(/^\d+(\.\d{1,4})?$/), unitPrice: z.string().min(1) });
-const updateSchema = z.object({ id: z.string().min(1), reference: z.string().trim().min(1).max(40), dueDate: z.coerce.date(), description: z.string().trim().min(2).max(240), reason: z.string().trim().min(5).max(240), discountType: z.enum(["NONE", "PERCENT", "AMOUNT"]).default("NONE"), discountValue: z.string().trim().default("0") });
+const updateSchema = z.object({ id: z.string().min(1), reference: z.string().trim().min(1).max(40), dueDate: z.coerce.date(), description: z.string().trim().min(2).max(240), reason: z.string().trim().min(5).max(240), discountInput: z.string().trim().max(32).default("") });
 
 export type CommercialActionState = { error?: string; redirectTo?: string };
 
@@ -41,8 +43,8 @@ async function post(kind: "SALE" | "PURCHASE", _state: CommercialActionState, fo
     const { user, active } = await requireActiveTenant();
     const input = header.parse(Object.fromEntries(formData));
     const reference = await resolveReference({ tenantId: active.id, kind: kind === "SALE" ? "SALES_INVOICE" : "SUPPLIER_BILL", date: input.documentDate, supplied: input.reference, auto: input.autoReference === "true" });
-    await postCommercialDocument({ kind, actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, partyId: input.partyId, reference, documentDate: input.documentDate, dueDate: input.dueDate, description: input.description, discountType: input.discountType, discountValue: input.discountValue, lines: parseLines(formData) });
-    return { redirectTo: kind === "SALE" ? "/sales" : "/purchases" };
+    await postCommercialDocument({ kind, actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, partyId: input.partyId, reference, documentDate: input.documentDate, dueDate: input.dueDate, description: input.description, ...parseCommercialDiscount(input.discountInput), lines: parseLines(formData) });
+    return { redirectTo: withTransactionNotice(kind === "SALE" ? "/sales" : "/purchases", kind === "SALE" ? "sales-invoice" : "purchase-invoice") };
   } catch (error) { return postingError(error, kind); }
 }
 
@@ -50,7 +52,8 @@ async function update(kind: "SALE" | "PURCHASE", _state: CommercialActionState, 
   try {
     const { user, active } = await requireActiveTenant();
     const input = updateSchema.parse(Object.fromEntries(formData));
-    await updateCommercialDocument({ kind, actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, ...input, lines: parseLines(formData) });
+    const { discountInput, ...details } = input;
+    await updateCommercialDocument({ kind, actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, ...details, ...parseCommercialDiscount(discountInput), lines: parseLines(formData) });
     const path = kind === "SALE" ? "/sales" : "/purchases";
     revalidatePath(path); revalidatePath("/journals"); revalidatePath("/reports"); revalidatePath("/inventory");
     return { redirectTo: path };

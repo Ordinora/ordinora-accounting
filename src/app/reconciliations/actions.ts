@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { calculateReconciliation } from "@/lib/reconciliation-calculations";
 import { requireActiveTenant } from "@/lib/session";
 import { resolveReference } from "@/lib/reference-numbers";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 
 const allowed = ["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"];
 const createSchema = z.object({ accountId: z.string().min(1), reference: z.string().trim().max(40).default(""), autoReference: z.string().optional(), statementStart: z.coerce.date(), statementEnd: z.coerce.date(), statementClosingBalance: z.string().min(1) });
@@ -46,5 +47,5 @@ export async function updateReconciliation(formData: FormData) {
     if (selectedIds.length) await tx.bankReconciliationLine.createMany({ data: selectedIds.map((journalLineId) => ({ reconciliationId, journalLineId })) });
     if (intent === "finalize") await tx.bankReconciliation.update({ where: { id: reconciliationId }, data: { status: "RECONCILED", reconciledById: user.id, reconciledAt: new Date() } });
   });
-  redirect(intent === "finalize" ? "/reconciliations" : `/reconciliations/${reconciliationId}`);
+  redirect(intent === "finalize" ? withTransactionNotice("/reconciliations", "reconciliation") : `/reconciliations/${reconciliationId}`);
 }

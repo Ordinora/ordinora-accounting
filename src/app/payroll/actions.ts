@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { requireActiveTenant } from "@/lib/session";
 import { approvePayrollRun, postPayrollRun, preparePayrollRun } from "@/lib/payroll";
 import { resolveReference } from "@/lib/reference-numbers";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 
 function authorize(role: string | null) {
   if (!role || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT", "PAYROLL_OFFICER"].includes(role)) {
@@ -144,9 +145,9 @@ export async function postRun(formData: FormData) {
   revalidatePath(`/payroll/runs/${id}`);
   revalidatePath("/payroll");
   revalidatePath("/journals");
+  redirect(withTransactionNotice(`/payroll/runs/${id}`, "payroll-run"));
 }
 
 export async function lockPayrollRun(formData:FormData){const{user,active}=await requireActiveTenant();authorize(user.staffRole);const id=z.string().min(1).parse(formData.get("runId")),confirmation=z.literal("LOCK").parse(formData.get("confirmation"));await db.$transaction(async tx=>{const run=await tx.payrollRun.findFirst({where:{id,tenantId:active.id}});if(!run)throw new Error("Payroll run not found.");if(run.status!=="POSTED"||!run.journalId)throw new Error("Only a posted payroll run can be locked.");await tx.payrollRun.update({where:{id},data:{status:"LOCKED",lockedAt:new Date()}});await tx.auditEvent.create({data:{firmId:user.firmId,tenantId:active.id,actorId:user.id,actorKind:"STAFF",action:"PAYROLL_RUN_LOCKED",entityType:"PayrollRun",entityId:id,previousValues:{status:run.status},newValues:{status:"LOCKED",confirmation}}})});revalidatePath(`/payroll/runs/${id}`);revalidatePath("/payroll")}
 
 export async function updatePayrollRun(formData:FormData){const{user,active}=await requireActiveTenant();authorize(user.staffRole);const input=z.object({id:z.string().min(1),reference:z.string().trim().min(1).max(40),reason:z.string().trim().min(5).max(240)}).parse(Object.fromEntries(formData));await db.$transaction(async tx=>{const run=await tx.payrollRun.findFirst({where:{id:input.id,tenantId:active.id}});if(!run)throw new Error("Payroll run not found.");if(run.status==="LOCKED"||run.lockedAt)throw new Error("A locked payroll run cannot be updated.");await tx.payrollRun.update({where:{id:run.id},data:{reference:input.reference}});if(run.journalId)await tx.journal.update({where:{id:run.journalId},data:{reference:input.reference}});await tx.auditEvent.create({data:{firmId:user.firmId,tenantId:active.id,actorId:user.id,actorKind:"STAFF",action:"PAYROLL_RUN_UPDATED",entityType:"PayrollRun",entityId:run.id,previousValues:{reference:run.reference},newValues:{reference:input.reference},reason:input.reason}})});revalidatePath("/payroll");revalidatePath(`/payroll/runs/${input.id}`);revalidatePath("/journals");redirect(`/payroll/runs/${input.id}`)}
-

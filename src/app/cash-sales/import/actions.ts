@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { postDailyCashRegister } from "@/lib/daily-cash-sales";
 import { requireActiveTenant } from "@/lib/session";
 import { resolveReference } from "@/lib/reference-numbers";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 const schema=z.object({reference:z.string().trim().max(40).default(""),autoReference:z.string().optional(),registerDate:z.coerce.date(),cashAccountId:z.string().min(1),branchLabel:z.string().trim().max(80),registerLabel:z.string().trim().max(80),openingFloat:z.string(),actualClosingCash:z.string(),cashAmount:z.string(),cardAmount:z.string(),cardAccountId:z.string(),bankAmount:z.string(),bankAccountId:z.string(),otherAmount:z.string(),otherAccountId:z.string(),skuColumn:z.string().min(1),locationColumn:z.string().min(1),quantityColumn:z.string().min(1),unitPriceColumn:z.string(),totalAmountColumn:z.string(),descriptionColumn:z.string()});
 function fields(row:string){const values:string[]=[];let value="",quoted=false;for(let i=0;i<row.length;i++){const char=row[i];if(char==='"'&&quoted&&row[i+1]==='"'){value+='"';i++}else if(char==='"')quoted=!quoted;else if(char===","&&!quoted){values.push(value.trim());value=""}else value+=char}values.push(value.trim());return values}
 export async function importRetailSales(_:RetailImportState,formData:FormData):Promise<RetailImportState>{
@@ -24,5 +25,5 @@ export async function importRetailSales(_:RetailImportState,formData:FormData):P
     add("CASH",input.cashAmount,input.cashAccountId);add("CARD",input.cardAmount,input.cardAccountId);add("BANK_TRANSFER",input.bankAmount,input.bankAccountId);add("OTHER",input.otherAmount,input.otherAccountId);
     await postDailyCashRegister({actor:{tenantId:active.id,userId:user.id,firmId:user.firmId,role:user.staffRole},periodId:period.id,cashAccountId:input.cashAccountId,reference:input.reference,registerDate:input.registerDate,branchLabel:input.branchLabel,registerLabel:input.registerLabel,openingFloat:input.openingFloat,actualClosingCash:input.actualClosingCash,lines,tenders});
   }catch(error){return{error:error instanceof Error?error.message:"The retail sales summary could not be imported."}}
-  redirect("/cash-sales");
+  redirect(withTransactionNotice("/cash-sales", "cash-sale"));
 }

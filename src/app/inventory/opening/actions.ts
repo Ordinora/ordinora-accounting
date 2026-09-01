@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireActiveTenant } from "@/lib/session";
 import { resolveReference } from "@/lib/reference-numbers";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 import { receiveInventory } from "@/lib/inventory-ledger";
 
 const zero = new Prisma.Decimal(0);
@@ -98,5 +99,5 @@ export async function postOpeningInventory(formData: FormData) {
     await tx.auditEvent.create({ data: { firmId: user.firmId, tenantId: active.id, actorId: user.id, actorKind: "STAFF", action: input.postingMode === "ALLOCATE_EXISTING" ? "OPENING_INVENTORY_ALLOCATED" : "OPENING_INVENTORY_POSTED", entityType: journalId ? "Journal" : "OpeningInventoryAllocation", entityId: journalId ?? input.reference, newValues: { reference: input.reference, lines: lines.length, total: total.toString(), generalLedgerPosted: Boolean(journalId) } } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-  redirect("/inventory");
+  redirect(withTransactionNotice("/inventory", "inventory-opening"));
 }

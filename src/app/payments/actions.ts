@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { postDirectPayment } from "@/lib/payments";
 import { resolveReference } from "@/lib/reference-numbers";
 import { requireActiveTenant } from "@/lib/session";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 
 export type DirectPaymentActionState = {
   error?: string;
@@ -62,7 +63,7 @@ export async function createDirectPayment(_state: DirectPaymentActionState, form
     // Allocate the automatic reference only after the duplicate check so a warning does not consume a number.
     const reference = await resolveReference({ tenantId: active.id, kind: "PAYMENT", date: header.paymentDate, supplied: header.reference, auto: header.autoReference === "true" });
     await postDirectPayment({ actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, bankAccountId: header.bankAccountId, reference, paymentDate: header.paymentDate, payee: header.payee, description: header.description, currency: header.currency, discountType: header.discountType, discountValue: header.discountValue, paymentMethod: header.paymentMethod, chequeNumber: header.chequeNumber, chequeDate: header.chequeDate, lines });
-    return { redirectTo: "/payments" };
+    return { redirectTo: withTransactionNotice("/payments", "payment") };
   } catch (error) { return actionError(error); }
 }
 

@@ -54,7 +54,7 @@ export async function createCompany(_state: CreateCompanyState, formData: FormDa
     return { error: error instanceof Error ? error.message : "The company could not be created." };
   }
   (await cookies()).set(ACTIVE_TENANT_COOKIE, tenantId!, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 8 * 60 * 60 });
-  redirect("/");
+  redirect("/settings/opening-checklist");
 }
 
 export async function updateCompany(_state: UpdateCompanyState, formData: FormData): Promise<UpdateCompanyState> {

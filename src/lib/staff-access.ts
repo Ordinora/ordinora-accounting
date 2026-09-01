@@ -30,8 +30,10 @@ export function isSystemAdministrator(role: string | null | undefined) {
 }
 
 const accountantAdministrationFeatures = new Set([
+  "opening-checklist",
   "opening-balances",
   "opening-subledgers",
+  "opening-payroll",
   "periods",
   "currencies",
   "portal-documents",

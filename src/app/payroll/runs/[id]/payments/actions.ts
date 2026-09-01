@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireActiveTenant } from "@/lib/session";
 import { resolveReference } from "@/lib/reference-numbers";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 
 export type PayrollPaymentState = { error?: string };
 
@@ -42,5 +43,5 @@ export async function postPayrollSettlement(_state: PayrollPaymentState, formDat
     return { error: error instanceof Error ? error.message : "The payroll payment could not be posted." };
   }
   revalidatePath(`/payroll/runs/${runId}`);
-  redirect(`/payroll/runs/${runId}`);
+  redirect(withTransactionNotice(`/payroll/runs/${runId}`, "payroll-payment"));
 }
