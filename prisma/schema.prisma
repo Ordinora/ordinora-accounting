@@ -89,6 +89,7 @@ enum BankStatementLineStatus {
 enum JournalSource {
   MANUAL
   OPENING_BALANCE
+  YEAR_END_CLOSE
   SALES_INVOICE
   SALES_CREDIT_NOTE
   CUSTOMER_RECEIPT
@@ -394,6 +395,7 @@ model Tenant {
   legalName                     String
   tradingName                   String?
   registrationNumber            String?
+  email                         String?
   entityType                    EntityType
   registeredAddress             String?
   primaryContact                String?
@@ -464,19 +466,33 @@ model Tenant {
 }
 
 model TaxYear {
-  id                    String                 @id @default(cuid())
-  tenantId              String
-  year                  Int
-  startsOn              DateTime               @db.Date
-  endsOn                DateTime               @db.Date
-  filingDueOn           DateTime?              @db.Date
-  status                TaxWorkingStatus       @default(DRAFT)
-  notes                 String?
-  filedAt               DateTime?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  capitalAllowanceItems CapitalAllowanceItem[]
+  id                      String                 @id @default(cuid())
+  tenantId                String
+  year                    Int
+  startsOn                DateTime               @db.Date
+  endsOn                  DateTime               @db.Date
+  filingDueOn             DateTime?              @db.Date
+  status                  TaxWorkingStatus       @default(DRAFT)
+  notes                   String?
+  taxCompanyCategory      String                 @default("OTHER")
+  taxRateMode             String                 @default("STANDARD")
+  taxRate                 Decimal                @default(18.5) @db.Decimal(7, 4)
+  chargeableIncome        Decimal                @default(0) @db.Decimal(19, 4)
+  foreignIncome           Decimal                @default(0) @db.Decimal(19, 4)
+  doubleTaxRelief         Decimal                @default(0) @db.Decimal(19, 4)
+  tapTaxCredit            Decimal                @default(0) @db.Decimal(19, 4)
+  localEmploymentCredit   Decimal                @default(0) @db.Decimal(19, 4)
+  trainingTaxCredit       Decimal                @default(0) @db.Decimal(19, 4)
+  exportSalesTax          Decimal                @default(0) @db.Decimal(19, 4)
+  taxPaidEci              Decimal                @default(0) @db.Decimal(19, 4)
+  priorYearTaxOffset      Decimal                @default(0) @db.Decimal(19, 4)
+  withholdingTaxPaid      Decimal                @default(0) @db.Decimal(19, 4)
+  taxComputationUpdatedAt DateTime?
+  filedAt                 DateTime?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  tenant                  Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  capitalAllowanceItems   CapitalAllowanceItem[]
 
   @@unique([tenantId, year])
   @@index([tenantId, status, filingDueOn])
@@ -930,6 +946,10 @@ model SalesInvoice {
   description      String?
   currency         String                   @default("BND")
   exchangeRate     Decimal                  @default(1) @db.Decimal(24, 12)
+  foreignSubtotal  Decimal                  @default(0) @db.Decimal(19, 4)
+  discountType     String                   @default("NONE")
+  discountValue    Decimal                  @default(0) @db.Decimal(19, 4)
+  discountAmount   Decimal                  @default(0) @db.Decimal(19, 4)
   foreignTotal     Decimal                  @default(0) @db.Decimal(19, 4)
   baseTotal        Decimal                  @default(0) @db.Decimal(19, 4)
   taxCode          String                   @default("ZERO")
@@ -1085,6 +1105,10 @@ model SupplierBill {
   description      String?
   currency         String                   @default("BND")
   exchangeRate     Decimal                  @default(1) @db.Decimal(24, 12)
+  foreignSubtotal  Decimal                  @default(0) @db.Decimal(19, 4)
+  discountType     String                   @default("NONE")
+  discountValue    Decimal                  @default(0) @db.Decimal(19, 4)
+  discountAmount   Decimal                  @default(0) @db.Decimal(19, 4)
   foreignTotal     Decimal                  @default(0) @db.Decimal(19, 4)
   baseTotal        Decimal                  @default(0) @db.Decimal(19, 4)
   taxCode          String                   @default("ZERO")
@@ -1312,30 +1336,32 @@ model SupplierCreditNoteLine {
 }
 
 model CustomerReceipt {
-  id             String                   @id @default(cuid())
-  tenantId       String
-  customerId     String?
-  periodId       String
-  bankAccountId  String
-  reference      String
-  receiptDate    DateTime                 @db.Date
-  payerType      String                   @default("CUSTOMER")
-  payerName      String?
-  description    String?
-  currency       String
-  exchangeRate   Decimal                  @db.Decimal(24, 12)
-  foreignAmount  Decimal                  @db.Decimal(19, 4)
-  baseAmount     Decimal                  @db.Decimal(19, 4)
-  realizedFxBase Decimal                  @default(0) @db.Decimal(19, 4)
-  journalId      String?                  @unique
-  createdById    String
-  postedAt       DateTime                 @default(now())
-  tenant         Tenant                   @relation(fields: [tenantId], references: [id])
-  customer       Customer?                @relation(fields: [customerId], references: [id])
-  period         AccountingPeriod         @relation(fields: [periodId], references: [id])
-  bankAccount    Account                  @relation(fields: [bankAccountId], references: [id])
-  allocations    SalesInvoiceAllocation[]
-  lines          CustomerReceiptLine[]
+  id                    String                   @id @default(cuid())
+  tenantId              String
+  customerId            String?
+  periodId              String
+  bankAccountId         String
+  reference             String
+  receiptDate           DateTime                 @db.Date
+  payerType             String                   @default("CUSTOMER")
+  payerName             String?
+  description           String?
+  currency              String
+  exchangeRate          Decimal                  @db.Decimal(24, 12)
+  foreignAmount         Decimal                  @db.Decimal(19, 4)
+  baseAmount            Decimal                  @db.Decimal(19, 4)
+  realizedFxBase        Decimal                  @default(0) @db.Decimal(19, 4)
+  discountForeignAmount Decimal                  @default(0) @db.Decimal(19, 4)
+  discountBaseAmount    Decimal                  @default(0) @db.Decimal(19, 4)
+  journalId             String?                  @unique
+  createdById           String
+  postedAt              DateTime                 @default(now())
+  tenant                Tenant                   @relation(fields: [tenantId], references: [id])
+  customer              Customer?                @relation(fields: [customerId], references: [id])
+  period                AccountingPeriod         @relation(fields: [periodId], references: [id])
+  bankAccount           Account                  @relation(fields: [bankAccountId], references: [id])
+  allocations           SalesInvoiceAllocation[]
+  lines                 CustomerReceiptLine[]
 
   @@unique([tenantId, reference])
   @@index([tenantId, receiptDate])
@@ -1358,15 +1384,18 @@ model CustomerReceiptLine {
 }
 
 model SalesInvoiceAllocation {
-  id                   String          @id @default(cuid())
-  receiptId            String
-  invoiceId            String
-  foreignAmount        Decimal         @db.Decimal(19, 4)
-  carryingBaseAmount   Decimal         @db.Decimal(19, 4)
-  settlementBaseAmount Decimal         @db.Decimal(19, 4)
-  realizedFxBase       Decimal         @db.Decimal(19, 4)
-  receipt              CustomerReceipt @relation(fields: [receiptId], references: [id], onDelete: Restrict)
-  invoice              SalesInvoice    @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  id                    String          @id @default(cuid())
+  receiptId             String
+  invoiceId             String
+  foreignAmount         Decimal         @db.Decimal(19, 4)
+  discountInput         String?
+  discountForeignAmount Decimal         @default(0) @db.Decimal(19, 4)
+  discountBaseAmount    Decimal         @default(0) @db.Decimal(19, 4)
+  carryingBaseAmount    Decimal         @db.Decimal(19, 4)
+  settlementBaseAmount  Decimal         @db.Decimal(19, 4)
+  realizedFxBase        Decimal         @db.Decimal(19, 4)
+  receipt               CustomerReceipt @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  invoice               SalesInvoice    @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
 
   @@unique([receiptId, invoiceId])
   @@index([invoiceId])
@@ -1385,6 +1414,8 @@ model SupplierPayment {
   foreignAmount         Decimal                  @db.Decimal(19, 4)
   baseAmount            Decimal                  @db.Decimal(19, 4)
   realizedFxBase        Decimal                  @default(0) @db.Decimal(19, 4)
+  discountForeignAmount Decimal                  @default(0) @db.Decimal(19, 4)
+  discountBaseAmount    Decimal                  @default(0) @db.Decimal(19, 4)
   journalId             String?                  @unique
   createdById           String
   postedAt              DateTime                 @default(now())
@@ -1407,15 +1438,18 @@ model SupplierPayment {
 }
 
 model SupplierBillAllocation {
-  id                   String          @id @default(cuid())
-  paymentId            String
-  billId               String
-  foreignAmount        Decimal         @db.Decimal(19, 4)
-  carryingBaseAmount   Decimal         @db.Decimal(19, 4)
-  settlementBaseAmount Decimal         @db.Decimal(19, 4)
-  realizedFxBase       Decimal         @db.Decimal(19, 4)
-  payment              SupplierPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
-  bill                 SupplierBill    @relation(fields: [billId], references: [id], onDelete: Restrict)
+  id                    String          @id @default(cuid())
+  paymentId             String
+  billId                String
+  foreignAmount         Decimal         @db.Decimal(19, 4)
+  discountInput         String?
+  discountForeignAmount Decimal         @default(0) @db.Decimal(19, 4)
+  discountBaseAmount    Decimal         @default(0) @db.Decimal(19, 4)
+  carryingBaseAmount    Decimal         @db.Decimal(19, 4)
+  settlementBaseAmount  Decimal         @db.Decimal(19, 4)
+  realizedFxBase        Decimal         @db.Decimal(19, 4)
+  payment               SupplierPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  bill                  SupplierBill    @relation(fields: [billId], references: [id], onDelete: Restrict)
 
   @@unique([paymentId, billId])
   @@index([billId])
@@ -1432,6 +1466,10 @@ model Payment {
   description           String?
   currency              String
   exchangeRate          Decimal          @db.Decimal(24, 12)
+  foreignSubtotal       Decimal          @default(0) @db.Decimal(19, 4)
+  discountType          String           @default("NONE")
+  discountValue         Decimal          @default(0) @db.Decimal(19, 4)
+  discountAmount        Decimal          @default(0) @db.Decimal(19, 4)
   foreignAmount         Decimal          @db.Decimal(19, 4)
   baseAmount            Decimal          @db.Decimal(19, 4)
   journalId             String?          @unique

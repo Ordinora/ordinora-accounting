@@ -11,6 +11,21 @@ type Option = { id: string; code: string; name: string };
 type Document = { id: string; partyId: string; reference: string; date: string; currency: string; outstanding: string };
 type Line = { id: number; description: string; accountId: string; quantity: string; unitPrice: string };
 const emptyLine = (id: number): Line => ({ id, description: "", accountId: "", quantity: "1", unitPrice: "" });
+function liveDiscount(input: string, outstanding: number) {
+  const value = input.trim();
+  if (!value) return { amount: 0, error: "" };
+  const symbols = [...value].filter((character) => character === "%").length;
+  if (symbols) {
+    if (symbols !== 1 || !/^\d+(\.\d{1,4})?\s*%$/.test(value)) return { amount: 0, error: "Use a format such as 5% or 2.5%." };
+    const percentage = Number(value.replace("%", "").trim());
+    if (percentage < 0 || percentage > 100) return { amount: 0, error: "Percentage must be between 0% and 100%." };
+    return { amount: Math.round(outstanding * percentage) / 100, error: "" };
+  }
+  if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)(\.\d{1,2})?$/.test(value)) return { amount: 0, error: "Enter a fixed amount or percentage." };
+  const amount = Number(value.replaceAll(",", ""));
+  if (amount > outstanding) return { amount: 0, error: "Discount exceeds outstanding." };
+  return { amount, error: "" };
+}
 
 export function ReceiptForm({ action, customers: initialCustomers, bankAccounts, postingAccounts, documents, currencies, defaultCurrency }: {
   action: (data: FormData) => Promise<void>;
@@ -28,11 +43,16 @@ export function ReceiptForm({ action, customers: initialCustomers, bankAccounts,
   const [currency, setCurrency] = useState(defaultCurrency);
   const [lines, setLines] = useState<Line[]>([emptyLine(1)]);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [discounts, setDiscounts] = useState<Record<string, string>>({});
   const visibleDocuments = documents.filter((document) => document.partyId === customerId);
   const selectedCustomer = customers.find((customer) => customer.id === customerId);
   const directTotal = lines.reduce((sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0), 0);
-  const allocationTotal = useMemo(() => visibleDocuments.reduce((sum, document) => sum + (Number(amounts[document.id]) || 0), 0), [visibleDocuments, amounts]);
+  const allocationRows = useMemo(() => visibleDocuments.map((document) => { const outstanding = Number(document.outstanding), discount = liveDiscount(discounts[document.id] ?? "", outstanding), cash = Number(amounts[document.id]) || 0, settled = cash + discount.amount; return { document, outstanding, discount, cash, settled, remaining: Math.max(0, outstanding - settled), over: settled > outstanding + 0.00001 }; }), [visibleDocuments, amounts, discounts]);
+  const allocationTotal = allocationRows.reduce((sum, row) => sum + row.cash, 0);
+  const discountTotal = allocationRows.reduce((sum, row) => sum + row.discount.amount, 0);
+  const settledTotal = allocationTotal + discountTotal;
   const updateLine = (id: number, field: keyof Omit<Line, "id">, value: string) => setLines((current) => current.map((line) => line.id === id ? { ...line, [field]: value } : line));
+  const changeDiscount = (document: Document, input: string) => { const calculated = liveDiscount(input, Number(document.outstanding)); setDiscounts((current) => ({ ...current, [document.id]: input })); if (!calculated.error) setAmounts((current) => ({ ...current, [document.id]: Math.max(0, Number(document.outstanding) - calculated.amount).toFixed(2) })); };
 
   const changeMode = (next: "LINES" | "INVOICES") => {
     setMode(next);
@@ -51,7 +71,7 @@ export function ReceiptForm({ action, customers: initialCustomers, bankAccounts,
         <label>Date <em>*</em><input name="settlementDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></label>
         <label>Received in <em>*</em><select name="bankAccountId" required><option value="">Select cash or bank account</option>{bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
         <label>Paid by <em>*</em><select name="payerType" value={payerType} onChange={(event) => { const next = event.target.value as "CUSTOMER" | "OTHER"; setPayerType(next); if (next === "OTHER") setCustomerId(""); }} disabled={mode === "INVOICES"}><option value="CUSTOMER">Customer</option>{mode === "LINES" && <option value="OTHER">Other</option>}</select>{mode === "INVOICES" && <input type="hidden" name="payerType" value="CUSTOMER" />}</label>
-        {payerType === "CUSTOMER" ? <div className="quick-party-field"><label>Customer <em>*</em><select name="partyId" value={customerId} onChange={(event) => { const id = event.target.value; setCustomerId(id); setAmounts({}); const customer = customers.find((entry) => entry.id === id); if (mode === "INVOICES" && customer) setCurrency(customer.currencyCode); }} required><option value="">Select customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.code} — {customer.name}</option>)}</select></label><QuickContactButton kind="customer" onCreated={(customer) => { const created = { ...customer, currencyCode: defaultCurrency }; setCustomers((current) => [...current, created]); setCustomerId(created.id); }} /></div> : <label>Name of payer <em>*</em><input name="payerName" placeholder="Person or business name" required /></label>}
+        {payerType === "CUSTOMER" ? <div className="quick-party-field"><label>Customer <em>*</em><select name="partyId" value={customerId} onChange={(event) => { const id = event.target.value; setCustomerId(id); setAmounts({}); setDiscounts({}); const customer = customers.find((entry) => entry.id === id); if (mode === "INVOICES" && customer) setCurrency(customer.currencyCode); }} required><option value="">Select customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.code} — {customer.name}</option>)}</select></label><QuickContactButton kind="customer" onCreated={(customer) => { const created = { ...customer, currencyCode: defaultCurrency }; setCustomers((current) => [...current, created]); setCustomerId(created.id); }} /></div> : <label>Name of payer <em>*</em><input name="payerName" placeholder="Person or business name" required /></label>}
         {mode === "LINES" && <label>Currency <em>*</em><select name="currency" value={currency} onChange={(event) => setCurrency(event.target.value)}>{currencies.map((code) => <option key={code}>{code}</option>)}</select></label>}
         <label className={mode === "INVOICES" ? "span-2" : ""}>Description<input name="description" placeholder="Purpose of receipt or supporting reference" /></label>
       </div>
@@ -66,10 +86,10 @@ export function ReceiptForm({ action, customers: initialCustomers, bankAccounts,
         <td className="numeric">{currency} {((Number(line.quantity) || 0) * (Number(line.unitPrice) || 0)).toFixed(2)}</td>
         <td><button type="button" className="line-delete" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((entry) => entry.id !== line.id))}><Trash2 size={16} /></button></td>
       </tr>)}</tbody></table></div><div className="document-total"><span>Lines <strong>{lines.length}</strong></span><span className="grand-total">Receipt total <strong>{currency} {directTotal.toFixed(2)}</strong></span></div>
-    </section> : <section className="form-section"><div className="section-heading"><h2>Invoice allocation</h2><p>Allocate this receipt to one or more open invoices. This reduces receivables and does not record revenue a second time.</p></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Reference</th><th>Date</th><th>Currency</th><th className="numeric">Outstanding</th><th className="numeric">Allocate</th></tr></thead><tbody>
-      {visibleDocuments.map((document) => <tr key={document.id}><td><strong>{document.reference}</strong><input type="hidden" name="documentId" value={document.id} /></td><td>{document.date}</td><td>{document.currency}</td><td className="numeric">{document.currency} {Number(document.outstanding).toFixed(2)}</td><td className="numeric"><input name="allocationAmount" type="number" min="0" step="0.01" value={amounts[document.id] ?? ""} onChange={(event) => setAmounts((current) => ({ ...current, [document.id]: event.target.value }))} placeholder="0.00" /></td></tr>)}
-      {!customerId && <tr><td colSpan={5}>Select a customer to view open invoices.</td></tr>}{customerId && !visibleDocuments.length && <tr><td colSpan={5}>No open invoices for this customer.</td></tr>}
-    </tbody></table></div><div className="document-total"><span>Invoices selected <strong>{visibleDocuments.filter((document) => Number(amounts[document.id]) > 0).length}</strong></span><span className="grand-total">Receipt total <strong>{selectedCustomer?.currencyCode ?? defaultCurrency} {allocationTotal.toFixed(2)}</strong></span></div></section>}
+    </section> : <section className="form-section settlement-allocation-section"><div className="section-heading"><h2>Invoice allocation</h2><p>Enter a sales discount as a fixed amount or percentage. Cash received remains editable for partial settlement.</p></div><div className="data-table-wrap"><table className="data-table settlement-table"><thead><tr><th>Reference</th><th>Date</th><th className="numeric">Outstanding</th><th className="numeric">Sales discount</th><th className="numeric">Discount amount</th><th className="numeric">Cash received</th><th className="numeric">Total settled</th><th className="numeric">Remaining</th></tr></thead><tbody>
+      {allocationRows.map(({ document, outstanding, discount, settled, remaining, over }) => <tr key={document.id}><td><strong>{document.reference}</strong><input type="hidden" name="documentId" value={document.id} /></td><td>{document.date}</td><td className="numeric">{document.currency} {outstanding.toFixed(2)}</td><td className="numeric"><input name="discountInput" value={discounts[document.id] ?? ""} onChange={(event) => changeDiscount(document, event.target.value)} placeholder="5% or 50.00" aria-invalid={Boolean(discount.error)} />{discount.error && <small className="field-error">{discount.error}</small>}</td><td className="numeric">{document.currency} {discount.amount.toFixed(2)}</td><td className="numeric"><input name="allocationAmount" type="number" min="0" step="0.01" value={amounts[document.id] ?? ""} onChange={(event) => setAmounts((current) => ({ ...current, [document.id]: event.target.value }))} placeholder="0.00" /></td><td className="numeric">{document.currency} {settled.toFixed(2)}</td><td className={`numeric${over ? " field-error" : ""}`}>{over ? "Exceeds outstanding" : `${document.currency} ${remaining.toFixed(2)}`}</td></tr>)}
+      {!customerId && <tr><td colSpan={8}>Select a customer to view open invoices.</td></tr>}{customerId && !visibleDocuments.length && <tr><td colSpan={8}>No open invoices for this customer.</td></tr>}
+    </tbody></table></div><div className="document-total settlement-totals"><span>Invoices selected <strong>{allocationRows.filter((row) => row.settled > 0).length}</strong></span><span>Sales discount <strong>{selectedCustomer?.currencyCode ?? defaultCurrency} {discountTotal.toFixed(2)}</strong></span><span>Cash received <strong>{selectedCustomer?.currencyCode ?? defaultCurrency} {allocationTotal.toFixed(2)}</strong></span><span className="grand-total">Total settled <strong>{selectedCustomer?.currencyCode ?? defaultCurrency} {settledTotal.toFixed(2)}</strong></span></div></section>}
     <div className="form-actions"><Link href="/receipts" className="button-secondary">Cancel</Link><button className="button-primary">Post receipt</button></div>
   </form>;
 }

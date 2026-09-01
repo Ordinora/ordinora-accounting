@@ -27,7 +27,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
     const rows = await ledgerBalances(active.id, undefined, asOf), debits = rows.reduce((s, r) => s.add(r.balance.gt(0) ? r.balance : zero), zero), credits = rows.reduce((s, r) => s.add(r.balance.lt(0) ? r.balance.abs() : zero), zero);
     body = <><Summary items={[["Total debits", money(active.defaultCurrency, debits)], ["Total credits", money(active.defaultCurrency, credits)], ["Difference", money(active.defaultCurrency, debits.sub(credits))], ["Status", debits.eq(credits) ? "BALANCED" : "OUT OF BALANCE"]]} /><ReportTable heads={["Code", "Account", "Type", "Debit", "Credit"]} rows={rows.map(r => [r.code, r.name, r.type, money(active.defaultCurrency, r.balance.gt(0) ? r.balance : zero), money(active.defaultCurrency, r.balance.lt(0) ? r.balance.abs() : zero)])} /></>;
   } else if (type === "profit-loss" || type === "revenue-statement") {
-    const statement = calculateProfitLoss(await ledgerBalances(active.id, from, asOf));
+    const statement = calculateProfitLoss(await ledgerBalances(active.id, from, asOf, { excludeYearEndClosing: true }));
     body = <><Summary items={[["Net revenue", money(active.defaultCurrency, statement.netRevenue)], ["Gross profit", money(active.defaultCurrency, statement.grossProfit)], ["Operating income", money(active.defaultCurrency, statement.operatingIncome)], ["Net income", money(active.defaultCurrency, statement.netIncome)]]} /><ProfitLossStatementView statement={statement} currency={active.defaultCurrency}/></>;
   } else if (type === "balance-sheet") {
     const s = calculateBalanceSheet(await ledgerBalances(active.id, undefined, asOf));

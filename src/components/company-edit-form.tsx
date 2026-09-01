@@ -6,7 +6,7 @@ import { useActionState } from "react";
 import { updateCompany, type UpdateCompanyState } from "@/app/settings/companies/actions";
 
 type Company = {
-  id: string; legalName: string; tradingName: string | null; registrationNumber: string | null;
+  id: string; legalName: string; tradingName: string | null; registrationNumber: string | null; email: string | null;
   entityType: "PRIVATE_LIMITED" | "SOLE_PROPRIETORSHIP" | "PARTNERSHIP" | "OTHER";
   registeredAddress: string | null; primaryContact: string | null; defaultCurrency: string;
   financialYearEndMonth: number; financialYearEndDay: number; multiCurrencyEnabled: boolean;
@@ -23,6 +23,7 @@ export function CompanyEditForm({ company }: { company: Company }) {
       <label>Legal company name<input name="legalName" required maxLength={160} defaultValue={company.legalName}/></label>
       <label>Trading name<input name="tradingName" maxLength={160} defaultValue={company.tradingName ?? ""}/></label>
       <label>Registration number<input name="registrationNumber" maxLength={80} defaultValue={company.registrationNumber ?? ""}/></label>
+      <label>Company email<input name="email" type="email" maxLength={254} autoComplete="email" defaultValue={company.email ?? ""}/></label>
       <label>Entity type<select name="entityType" defaultValue={company.entityType}><option value="PRIVATE_LIMITED">Private limited company</option><option value="SOLE_PROPRIETORSHIP">Sole proprietorship</option><option value="PARTNERSHIP">Partnership</option><option value="OTHER">Other</option></select></label>
       <label>Primary contact<input name="primaryContact" maxLength={160} defaultValue={company.primaryContact ?? ""}/></label>
       <label>Base currency<input name="defaultCurrency" minLength={3} maxLength={3} required defaultValue={company.defaultCurrency}/><small>{company.journalCount ? "Locked after posted accounting entries." : "Use a three-letter currency code."}</small></label>

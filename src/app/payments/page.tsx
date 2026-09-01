@@ -38,7 +38,7 @@ export default async function PaymentsPage() {
     }),
     ...supplier.map((payment) => ({
       id: `supplier-${payment.id}`, reference: payment.reference, payee: payment.supplier.name, date: payment.paymentDate, paidFrom: payment.bankAccount.name,
-      currency: payment.currency, amount: payment.foreignAmount, type: `Supplier settlement · ${payment.allocations.length} bill${payment.allocations.length === 1 ? "" : "s"}`,
+      currency: payment.currency, amount: payment.foreignAmount, type: `Supplier settlement · ${payment.allocations.length} bill${payment.allocations.length === 1 ? "" : "s"}${payment.discountForeignAmount.gt(0) ? ` · discount ${payment.currency} ${Number(payment.discountForeignAmount).toFixed(2)}` : ""}`,
       editHref: `/payments/supplier/${payment.id}/edit`, journalId: payment.journalId, fixedAssetAction: undefined,
       paymentMethod: payment.paymentMethod ?? "BANK_TRANSFER", chequeNumber: payment.chequeNumber, chequeStatus: payment.chequeStatus,
       chequeAction: payment.paymentMethod === "BANK_CHEQUE" ? { href: `/payments/cheques/supplier/${payment.id}`, label: payment.chequeStatus === "RETURNED" ? "View returned cheque" : "Manage cheque" } : undefined,

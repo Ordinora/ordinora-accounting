@@ -40,7 +40,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
     sections = [{ title: "Accounts", rows: [...rows.map((row) => ({ label: `${row.code}  ${row.name}`, detail: row.balance.gt(0) ? `Debit ${amount(row.balance)}` : "", amount: row.balance.lt(0) ? `Credit ${amount(row.balance.abs())}` : "" })), { label: "Total debits", amount: amount(debits), strong: true }, { label: "Total credits", amount: amount(credits), strong: true }, { label: "Difference", amount: amount(debits.sub(credits)), strong: true }] }];
   } else if (type === "profit-loss" || type === "income-statement" || type === "revenue-statement") {
     title = type === "income-statement" ? "Income Statement" : type === "revenue-statement" ? "Revenue Statement" : "Profit & Loss"; subtitle = `For the period ${formatDate(from)} to ${formatDate(asOf)} | Accrual accounting`;
-    sections = profitLossPdfSections(calculateProfitLoss(await ledgerBalances(active.id, from, asOf)), amount);
+    sections = profitLossPdfSections(calculateProfitLoss(await ledgerBalances(active.id, from, asOf, { excludeYearEndClosing: true })), amount);
   } else if (type === "balance-sheet") {
     title = "Balance Sheet"; subtitle = `As at ${formatDate(asOf)}`;
     const statement = calculateBalanceSheet(await ledgerBalances(active.id, undefined, asOf));

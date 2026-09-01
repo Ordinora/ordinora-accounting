@@ -14,6 +14,7 @@ export type UpdateCompanyState = { error?: string };
 
 const schema = z.object({
   legalName: z.string().trim().min(2).max(160), tradingName: z.string().trim().max(160), registrationNumber: z.string().trim().max(80),
+  email: z.string().trim().max(254).refine((value) => value === "" || z.string().email().safeParse(value).success, "Enter a valid company email address."),
   entityType: z.enum(["PRIVATE_LIMITED", "SOLE_PROPRIETORSHIP", "PARTNERSHIP", "OTHER"]), registeredAddress: z.string().trim().max(500),
   primaryContact: z.string().trim().max(160), defaultCurrency: z.string().trim().length(3), financialYearEndMonth: z.coerce.number().int().min(1).max(12),
   financialYearEndDay: z.coerce.number().int().min(1).max(31), setupYear: z.coerce.number().int().min(2000).max(2100), multiCurrencyEnabled: z.string().optional(),
@@ -36,7 +37,7 @@ export async function createCompany(_state: CreateCompanyState, formData: FormDa
     if (duplicate) throw new Error("A company with this legal name already exists.");
     const created = await db.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({ data: {
-        firmId: user.firmId, legalName: input.legalName, tradingName: input.tradingName || null, registrationNumber: input.registrationNumber || null,
+        firmId: user.firmId, legalName: input.legalName, tradingName: input.tradingName || null, registrationNumber: input.registrationNumber || null, email: input.email || null,
         entityType: input.entityType, registeredAddress: input.registeredAddress || null, primaryContact: input.primaryContact || null,
         financialYearEndMonth: input.financialYearEndMonth, financialYearEndDay: input.financialYearEndDay, defaultCurrency: input.defaultCurrency.toUpperCase(),
         multiCurrencyEnabled: input.multiCurrencyEnabled === "on", portalEnabled: false, reportMode: "LIVE_POSTED_AND_PUBLISHED",
@@ -45,7 +46,7 @@ export async function createCompany(_state: CreateCompanyState, formData: FormDa
       await tx.staffTenantAssignment.upsert({ where: { userId_tenantId: { userId: user.id, tenantId: tenant.id } }, update: {}, create: { userId: user.id, tenantId: tenant.id } });
       await tx.account.createMany({ data: bruneiChart.map(([code, name, type, reportingClassification, isControlAccount]) => ({ tenantId: tenant.id, code, name, type, reportingClassification, isControlAccount: Boolean(isControlAccount), controlRole: controlRoleForChartCode(code) })) });
       await tx.accountingPeriod.createMany({ data: periods.map((period) => ({ tenantId: tenant.id, ...period })) });
-      await tx.auditEvent.create({ data: { firmId: user.firmId, tenantId: tenant.id, actorId: user.id, actorKind: "STAFF", action: "COMPANY_CREATED", entityType: "Tenant", entityId: tenant.id, newValues: { legalName: tenant.legalName, setupYear: input.setupYear, accountsCreated: bruneiChart.length, periodsCreated: periods.length } } });
+      await tx.auditEvent.create({ data: { firmId: user.firmId, tenantId: tenant.id, actorId: user.id, actorKind: "STAFF", action: "COMPANY_CREATED", entityType: "Tenant", entityId: tenant.id, newValues: { legalName: tenant.legalName, email: tenant.email, setupYear: input.setupYear, accountsCreated: bruneiChart.length, periodsCreated: periods.length } } });
       return tenant;
     });
     tenantId = created.id;
@@ -71,15 +72,15 @@ export async function updateCompany(_state: UpdateCompanyState, formData: FormDa
     if (company._count.journals > 0 && currency !== company.defaultCurrency) throw new Error("Base currency cannot be changed after accounting entries have been posted.");
     await db.$transaction(async (tx) => {
       const updated = await tx.tenant.update({ where: { id: company.id }, data: {
-        legalName: input.legalName, tradingName: input.tradingName || null, registrationNumber: input.registrationNumber || null,
+        legalName: input.legalName, tradingName: input.tradingName || null, registrationNumber: input.registrationNumber || null, email: input.email || null,
         entityType: input.entityType, registeredAddress: input.registeredAddress || null, primaryContact: input.primaryContact || null,
         defaultCurrency: currency, financialYearEndMonth: input.financialYearEndMonth, financialYearEndDay: input.financialYearEndDay,
         multiCurrencyEnabled: input.multiCurrencyEnabled === "on", status: input.status,
       } });
       await tx.auditEvent.create({ data: {
         firmId: user.firmId, tenantId: company.id, actorId: user.id, actorKind: "STAFF", action: "COMPANY_UPDATED", entityType: "Tenant", entityId: company.id,
-        previousValues: { legalName: company.legalName, tradingName: company.tradingName, registrationNumber: company.registrationNumber, entityType: company.entityType, registeredAddress: company.registeredAddress, primaryContact: company.primaryContact, defaultCurrency: company.defaultCurrency, financialYearEndMonth: company.financialYearEndMonth, financialYearEndDay: company.financialYearEndDay, multiCurrencyEnabled: company.multiCurrencyEnabled, status: company.status },
-        newValues: { legalName: updated.legalName, tradingName: updated.tradingName, registrationNumber: updated.registrationNumber, entityType: updated.entityType, registeredAddress: updated.registeredAddress, primaryContact: updated.primaryContact, defaultCurrency: updated.defaultCurrency, financialYearEndMonth: updated.financialYearEndMonth, financialYearEndDay: updated.financialYearEndDay, multiCurrencyEnabled: updated.multiCurrencyEnabled, status: updated.status },
+        previousValues: { legalName: company.legalName, tradingName: company.tradingName, registrationNumber: company.registrationNumber, email: company.email, entityType: company.entityType, registeredAddress: company.registeredAddress, primaryContact: company.primaryContact, defaultCurrency: company.defaultCurrency, financialYearEndMonth: company.financialYearEndMonth, financialYearEndDay: company.financialYearEndDay, multiCurrencyEnabled: company.multiCurrencyEnabled, status: company.status },
+        newValues: { legalName: updated.legalName, tradingName: updated.tradingName, registrationNumber: updated.registrationNumber, email: updated.email, entityType: updated.entityType, registeredAddress: updated.registeredAddress, primaryContact: updated.primaryContact, defaultCurrency: updated.defaultCurrency, financialYearEndMonth: updated.financialYearEndMonth, financialYearEndDay: updated.financialYearEndDay, multiCurrencyEnabled: updated.multiCurrencyEnabled, status: updated.status },
         reason: input.reason,
       } });
     });

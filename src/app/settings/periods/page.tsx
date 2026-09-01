@@ -19,7 +19,7 @@ export default async function Page() {
   return (
     <AppShell user={{ displayName: user.displayName, email: user.email, role: user.staffRole?.replaceAll("_", " ") ?? "STAFF", firmName: user.firm.name }} tenants={tenants} activeTenant={active} pageTitle="Accounting periods" pageDescription="Create, close, reopen, and lock posting periods">
       <main className="module-page">
-        <header className="module-header"><div><p className="eyebrow">{active.legalName.toUpperCase()}</p><h2>Accounting periods</h2><p>Period controls determine which dates can receive journals and operational postings.</p></div></header>
+        <header className="module-header"><div><p className="eyebrow">{active.legalName.toUpperCase()}</p><h2>Accounting periods</h2><p>Period controls determine which dates can receive journals and operational postings.</p></div><Link href="/settings/periods/year-end" className="button-important">Year-end close</Link></header>
         <div className="split-layout">
           <section className="surface-card table-card">
             <div className="card-header"><div><h3>Period register</h3><p>Dates cannot be changed after accounting activity has been recorded.</p></div></div>

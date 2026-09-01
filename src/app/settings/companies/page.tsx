@@ -62,6 +62,7 @@ export default async function Page() {
                       <strong>{company.legalName}</strong>
                     </span>
                     {company.tradingName && <small>{company.tradingName}</small>}
+                    {company.email && <small>{company.email}</small>}
                   </td>
                   <td>{company.entityType.replaceAll("_", " ")}</td>
                   <td>{company.defaultCurrency}</td>

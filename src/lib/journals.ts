@@ -81,6 +81,7 @@ export async function permanentlyDeleteJournal(actor: Actor, journalId: string, 
   return db.$transaction(async (tx) => {
     const selected = await tx.journal.findFirst({ where: { id: journalId, tenantId: actor.tenantId }, include: { period: true, lines: { select: { id: true } }, reversal: true, reversalOf: true } });
     if (!selected) throw new JournalWorkflowError("Journal not found.");
+    if (selected.source === "YEAR_END_CLOSE") throw new JournalWorkflowError("A year-end closing journal cannot be permanently deleted. Reopen the year-end period and reverse the journal so the audit trail remains complete.");
     if (confirmation.trim() !== selected.reference) throw new JournalWorkflowError(`Type ${selected.reference} exactly to confirm permanent deletion.`);
     if (selected.period.status !== "OPEN") throw new JournalWorkflowError("Transactions in a closed, locked, or finalized period cannot be permanently deleted.");
     const original = selected.reversalOfId ? await tx.journal.findUniqueOrThrow({ where: { id: selected.reversalOfId }, include: { reversal: true } }) : selected;
@@ -141,10 +142,35 @@ async function deleteJournalSource(tx: Prisma.TransactionClient, tenantId: strin
     if (document.allocations.length || document.creditNotes.length) throw new JournalWorkflowError("This supplier bill has payments or credit notes. Delete those linked transactions first.");
     await removeInventoryMovements(tx, tenantId, "SupplierBill", sourceId); await tx.supplierBillLine.deleteMany({ where: { billId: sourceId } }); await tx.supplierBill.delete({ where: { id: sourceId } }); return;
   }
-  if (source === "SALES_CREDIT_NOTE") { await tx.salesCreditNoteLine.deleteMany({ where: { creditNoteId: sourceId } }); await tx.salesCreditNote.deleteMany({ where: owned }); return; }
-  if (source === "SUPPLIER_CREDIT_NOTE") { await tx.supplierCreditNoteLine.deleteMany({ where: { creditNoteId: sourceId } }); await tx.supplierCreditNote.deleteMany({ where: owned }); return; }
-  if (source === "CUSTOMER_RECEIPT") { await tx.salesInvoiceAllocation.deleteMany({ where: { receiptId: sourceId } }); await tx.customerReceiptLine.deleteMany({ where: { receiptId: sourceId } }); await tx.customerReceipt.deleteMany({ where: owned }); return; }
-  if (source === "SUPPLIER_PAYMENT") { await tx.supplierBillAllocation.deleteMany({ where: { paymentId: sourceId } }); await tx.supplierPayment.deleteMany({ where: owned }); return; }
+  if (source === "SALES_CREDIT_NOTE") {
+    const creditNote = await tx.salesCreditNote.findFirst({ where: owned, select: { invoiceId: true } });
+    await tx.salesCreditNoteLine.deleteMany({ where: { creditNoteId: sourceId } });
+    await tx.salesCreditNote.deleteMany({ where: owned });
+    if (creditNote) await refreshSalesInvoiceStatus(tx, tenantId, creditNote.invoiceId);
+    return;
+  }
+  if (source === "SUPPLIER_CREDIT_NOTE") {
+    const creditNote = await tx.supplierCreditNote.findFirst({ where: owned, select: { billId: true } });
+    await tx.supplierCreditNoteLine.deleteMany({ where: { creditNoteId: sourceId } });
+    await tx.supplierCreditNote.deleteMany({ where: owned });
+    if (creditNote) await refreshSupplierBillStatus(tx, tenantId, creditNote.billId);
+    return;
+  }
+  if (source === "CUSTOMER_RECEIPT") {
+    const invoiceIds = (await tx.salesInvoiceAllocation.findMany({ where: { receiptId: sourceId }, select: { invoiceId: true } })).map((allocation) => allocation.invoiceId);
+    await tx.salesInvoiceAllocation.deleteMany({ where: { receiptId: sourceId } });
+    await tx.customerReceiptLine.deleteMany({ where: { receiptId: sourceId } });
+    await tx.customerReceipt.deleteMany({ where: owned });
+    for (const invoiceId of invoiceIds) await refreshSalesInvoiceStatus(tx, tenantId, invoiceId);
+    return;
+  }
+  if (source === "SUPPLIER_PAYMENT") {
+    const billIds = (await tx.supplierBillAllocation.findMany({ where: { paymentId: sourceId }, select: { billId: true } })).map((allocation) => allocation.billId);
+    await tx.supplierBillAllocation.deleteMany({ where: { paymentId: sourceId } });
+    await tx.supplierPayment.deleteMany({ where: owned });
+    for (const billId of billIds) await refreshSupplierBillStatus(tx, tenantId, billId);
+    return;
+  }
   if (source === "PAYMENT") { await removeInventoryMovements(tx, tenantId, "Payment", sourceId); await tx.paymentLine.deleteMany({ where: { paymentId: sourceId } }); await tx.payment.deleteMany({ where: owned }); return; }
   if (source === "INTER_ACCOUNT_TRANSFER") { await tx.interAccountTransfer.deleteMany({ where: owned }); return; }
   if (source === "DAILY_CASH_SALES") { await removeInventoryMovements(tx, tenantId, "DailyCashRegister", sourceId); await tx.dailyCashSaleLine.deleteMany({ where: { registerId: sourceId } }); await tx.dailyCashTender.deleteMany({ where: { registerId: sourceId } }); await tx.dailyCashRegister.deleteMany({ where: owned }); return; }
@@ -154,6 +180,24 @@ async function deleteJournalSource(tx: Prisma.TransactionClient, tenantId: strin
   if (source === "FIXED_ASSET_DEPRECIATION") { await tx.fixedAssetDepreciation.deleteMany({ where: owned }); return; }
   if (source === "FIXED_ASSET_DISPOSAL") { const disposal = await tx.fixedAssetDisposal.findFirst({ where: owned }); if (disposal) { await tx.fixedAsset.update({ where: { id: disposal.fixedAssetId }, data: { status: "ACTIVE", disposedOn: null, disposalProceeds: null } }); await tx.fixedAssetDisposal.delete({ where: { id: disposal.id } }); } return; }
   throw new JournalWorkflowError(`Permanent deletion is not yet supported for ${source.replaceAll("_", " ").toLowerCase()} transactions.`);
+}
+
+async function refreshSupplierBillStatus(tx: Prisma.TransactionClient, tenantId: string, billId: string) {
+  const bill = await tx.supplierBill.findFirst({ where: { id: billId, tenantId }, include: { allocations: true, creditNotes: true } });
+  if (!bill || bill.status === "VOIDED") return;
+  const applied = bill.allocations.reduce((sum, allocation) => sum.add(allocation.foreignAmount), zero)
+    .add(bill.creditNotes.reduce((sum, creditNote) => sum.add(creditNote.foreignTotal), zero));
+  const outstanding = bill.foreignTotal.sub(applied);
+  await tx.supplierBill.update({ where: { id: bill.id }, data: { status: outstanding.lte(0) ? "PAID" : applied.gt(0) ? "PARTIALLY_PAID" : "POSTED" } });
+}
+
+async function refreshSalesInvoiceStatus(tx: Prisma.TransactionClient, tenantId: string, invoiceId: string) {
+  const invoice = await tx.salesInvoice.findFirst({ where: { id: invoiceId, tenantId }, include: { allocations: true, creditNotes: true } });
+  if (!invoice || invoice.status === "VOIDED") return;
+  const applied = invoice.allocations.reduce((sum, allocation) => sum.add(allocation.foreignAmount), zero)
+    .add(invoice.creditNotes.reduce((sum, creditNote) => sum.add(creditNote.foreignTotal), zero));
+  const outstanding = invoice.foreignTotal.sub(applied);
+  await tx.salesInvoice.update({ where: { id: invoice.id }, data: { status: outstanding.lte(0) ? "PAID" : applied.gt(0) ? "PARTIALLY_PAID" : "POSTED" } });
 }
 
 async function removeInventoryMovements(tx: Prisma.TransactionClient, tenantId: string, sourceType: string, sourceId: string) {

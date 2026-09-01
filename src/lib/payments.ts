@@ -2,16 +2,17 @@ import "server-only";
 import { Prisma, type StaffRole } from "@prisma/client";
 import { db } from "./db";
 import { receiveInventory } from "./inventory-ledger";
-import { calculatePaymentLines, type PaymentLineInput } from "./payment-calculations";
+import { calculatePaymentAmounts, type PaymentDiscountType, type PaymentLineInput } from "./payment-calculations";
 import { ensureUniqueChequeNumber, validateChequeDetails, type ChequeDetails } from "./bank-cheques";
 
 type Actor = { tenantId: string; userId: string; firmId: string; role: StaffRole | null };
-type PaymentInput = { actor: Actor; bankAccountId: string; reference: string; paymentDate: Date; payee: string; description: string; currency: string; lines: PaymentLineInput[] } & ChequeDetails;
+type PaymentInput = { actor: Actor; bankAccountId: string; reference: string; paymentDate: Date; payee: string; description: string; currency: string; discountType?: PaymentDiscountType; discountValue?: string; lines: PaymentLineInput[] } & ChequeDetails;
 const zero = new Prisma.Decimal(0);
 
 export async function postDirectPayment(input: PaymentInput) {
   if (!input.actor.role || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(input.actor.role)) throw new Error("Your role cannot post payments.");
-  const lines = calculatePaymentLines(input.lines);
+  const calculated = calculatePaymentAmounts(input.lines, input.discountType ?? "NONE", input.discountValue ?? "0");
+  const lines = calculated.lines;
   return db.$transaction(async (tx) => {
     const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: input.actor.tenantId } });
     const period = await tx.accountingPeriod.findFirst({ where: { tenantId: tenant.id, status: "OPEN", startsOn: { lte: input.paymentDate }, endsOn: { gte: input.paymentDate } }, orderBy: { startsOn: "desc" } });
@@ -41,13 +42,17 @@ export async function postDirectPayment(input: PaymentInput) {
       exchangeRate = rate.rateToBase;
     }
     const prepared = lines.map((line) => ({ ...line, baseAmount: line.foreignAmount.mul(exchangeRate).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP) }));
+    const foreignSubtotal = calculated.foreignSubtotal;
+    const discountType = calculated.discountType;
+    const discountValue = calculated.discountValue;
+    const discountAmount = calculated.discountAmount;
     const foreignAmount = prepared.reduce((sum, line) => sum.add(line.foreignAmount), zero);
     const baseAmount = prepared.reduce((sum, line) => sum.add(line.baseAmount), zero);
-    const payment = await tx.payment.create({ data: { tenantId: tenant.id, periodId: period.id, bankAccountId: bank.id, reference: input.reference.trim(), paymentDate: input.paymentDate, payee: input.payee.trim(), description: input.description.trim() || null, currency, exchangeRate, foreignAmount, baseAmount, createdById: input.actor.userId, ...cheque, lines: { create: prepared.map((line) => ({ accountId: line.accountId, inventoryItemId:line.inventoryItemId,inventoryLocationId:line.inventoryLocationId,description: line.description, quantity: line.quantity, unitPrice: line.unitPrice,discountPercent:line.discountPercent,discountAmount:line.discountAmount, foreignAmount: line.foreignAmount, baseAmount: line.baseAmount })) } } });
+    const payment = await tx.payment.create({ data: { tenantId: tenant.id, periodId: period.id, bankAccountId: bank.id, reference: input.reference.trim(), paymentDate: input.paymentDate, payee: input.payee.trim(), description: input.description.trim() || null, currency, exchangeRate, foreignSubtotal, discountType, discountValue, discountAmount, foreignAmount, baseAmount, createdById: input.actor.userId, ...cheque, lines: { create: prepared.map((line) => ({ accountId: line.accountId, inventoryItemId:line.inventoryItemId,inventoryLocationId:line.inventoryLocationId,description: line.description, quantity: line.quantity, unitPrice: line.unitPrice,discountPercent:line.discountPercent,discountAmount:line.discountAmount, foreignAmount: line.foreignAmount, baseAmount: line.baseAmount })) } } });
     for(const line of prepared.filter(line=>line.inventoryItemId&&line.inventoryLocationId)){const receipt=await receiveInventory(tx,{tenantId:tenant.id,costingMethod:tenant.inventoryCostingMethod,itemId:line.inventoryItemId!,locationId:line.inventoryLocationId!,receivedOn:input.paymentDate,quantity:line.quantity,totalValue:line.baseAmount,sourceType:"Payment",sourceId:payment.id});await tx.inventoryMovement.create({data:{tenantId:tenant.id,itemId:line.inventoryItemId!,locationId:line.inventoryLocationId!,type:"PURCHASE",movementDate:input.paymentDate,quantity:line.quantity,unitCost:receipt.receiptUnitCost,totalCost:line.baseAmount,reference:input.reference.trim(),sourceType:"Payment",sourceId:payment.id,notes:line.description,createdById:input.actor.userId}})}
     const journal = await tx.journal.create({ data: { tenantId: tenant.id, periodId: period.id, reference: input.reference.trim(), description: input.description.trim() || `Payment to ${input.payee.trim()}`, accountingDate: input.paymentDate, status: "POSTED", source: "PAYMENT", sourceId: payment.id, createdById: input.actor.userId, approvedById: input.actor.userId, postedById: input.actor.userId, postedAt: new Date(), lines: { create: [...prepared.map((line) => ({ accountId: line.accountId, debit: line.baseAmount, credit: zero, description: line.description, currencyCode: currency, exchangeRate, foreignDebit: line.foreignAmount, foreignCredit: zero })), { accountId: bank.id, debit: zero, credit: baseAmount, description: `Payment to ${input.payee.trim()}`, currencyCode: currency, exchangeRate, foreignDebit: zero, foreignCredit: foreignAmount }] } } });
     await tx.payment.update({ where: { id: payment.id }, data: { journalId: journal.id } });
-    await tx.auditEvent.create({ data: { firmId: input.actor.firmId, tenantId: tenant.id, actorId: input.actor.userId, actorKind: "STAFF", action: "PAYMENT_POSTED", entityType: "Payment", entityId: payment.id, newValues: { reference: payment.reference, payee: payment.payee, currency, foreignAmount: foreignAmount.toString(), baseAmount: baseAmount.toString(), lineCount: prepared.length, journalId: journal.id } } });
+    await tx.auditEvent.create({ data: { firmId: input.actor.firmId, tenantId: tenant.id, actorId: input.actor.userId, actorKind: "STAFF", action: "PAYMENT_POSTED", entityType: "Payment", entityId: payment.id, newValues: { reference: payment.reference, payee: payment.payee, currency, foreignSubtotal: foreignSubtotal.toString(), discountType, discountValue: discountValue.toString(), discountAmount: discountAmount.toString(), foreignAmount: foreignAmount.toString(), baseAmount: baseAmount.toString(), lineCount: prepared.length, journalId: journal.id } } });
     return payment;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }

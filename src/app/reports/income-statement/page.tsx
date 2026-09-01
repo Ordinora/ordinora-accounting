@@ -16,7 +16,7 @@ const displayed = (date: Date) => date.toLocaleDateString("en-BN", { timeZone: "
 export default async function Page({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const query = await searchParams, { user, tenants, active } = await requireActiveTenant(), now = new Date();
   const from = parsed(query.from, new Date(Date.UTC(now.getUTCFullYear(), 0, 1))), to = parsed(query.to, now);
-  const statement = calculateProfitLoss(await ledgerBalances(active.id, from, to));
+  const statement = calculateProfitLoss(await ledgerBalances(active.id, from, to, { excludeYearEndClosing: true }));
   const range = `from=${from.toISOString().slice(0,10)}&to=${to.toISOString().slice(0,10)}`;
   return <AppShell user={{displayName:user.displayName,email:user.email,role:user.staffRole?.replaceAll("_"," ")??"STAFF",firmName:user.firm.name}} tenants={tenants} activeTenant={active} pageTitle="Income Statement" pageDescription="Income, expenses, and profit from posted accounting entries">
     <main className="module-page">

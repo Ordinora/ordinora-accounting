@@ -1,6 +1,35 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
-const zero=new Prisma.Decimal(0);
-export async function supplierSummary(tenantId:string,from:Date,to:Date){const suppliers=await db.supplier.findMany({where:{tenantId},orderBy:{name:"asc"},include:{bills:{where:{billDate:{lte:to},status:{not:"VOIDED"}}},creditNotes:{where:{creditDate:{lte:to}}},payments:{where:{paymentDate:{lte:to}}}}});return suppliers.map(supplier=>{const bills=supplier.bills.filter(x=>x.billDate>=from).reduce((s,x)=>s.add(x.baseTotal),zero),credits=supplier.creditNotes.filter(x=>x.creditDate>=from).reduce((s,x)=>s.add(x.baseTotal),zero),payments=supplier.payments.filter(x=>x.paymentDate>=from).reduce((s,x)=>s.add(x.baseAmount),zero),outstanding=supplier.bills.reduce((s,x)=>s.add(x.baseTotal),zero).sub(supplier.creditNotes.reduce((s,x)=>s.add(x.baseTotal),zero)).sub(supplier.payments.reduce((s,x)=>s.add(x.baseAmount),zero));return{id:supplier.id,code:supplier.code,name:supplier.name,currency:supplier.currencyCode,bills,credits,payments,outstanding}}).filter(x=>!x.bills.eq(0)||!x.credits.eq(0)||!x.payments.eq(0)||!x.outstanding.eq(0))}
-export async function supplierStatement(tenantId:string,supplierId:string,from:Date,to:Date){const supplier=await db.supplier.findFirst({where:{id:supplierId,tenantId},include:{bills:{where:{billDate:{lte:to},status:{not:"VOIDED"}}},creditNotes:{where:{creditDate:{lte:to}}},payments:{where:{paymentDate:{lte:to}}}}});if(!supplier)return null;const opening=supplier.bills.filter(x=>x.billDate<from).reduce((s,x)=>s.add(x.baseTotal),zero).sub(supplier.creditNotes.filter(x=>x.creditDate<from).reduce((s,x)=>s.add(x.baseTotal),zero)).sub(supplier.payments.filter(x=>x.paymentDate<from).reduce((s,x)=>s.add(x.baseAmount),zero));const transactions=[...supplier.bills.filter(x=>x.billDate>=from).map(x=>({id:`bill-${x.id}`,date:x.billDate,type:x.isOpeningBalance?"Opening bill":"Purchase invoice",reference:x.reference,description:x.description??"Purchase invoice",debit:zero,credit:x.baseTotal})),...supplier.creditNotes.filter(x=>x.creditDate>=from).map(x=>({id:`credit-${x.id}`,date:x.creditDate,type:"Debit note",reference:x.reference,description:x.description,debit:x.baseTotal,credit:zero})),...supplier.payments.filter(x=>x.paymentDate>=from).map(x=>({id:`payment-${x.id}`,date:x.paymentDate,type:"Payment",reference:x.reference,description:"Supplier payment",debit:x.baseAmount,credit:zero}))].sort((a,b)=>a.date.getTime()-b.date.getTime()||a.reference.localeCompare(b.reference));let running=opening;const rows=transactions.map(x=>{running=running.add(x.credit).sub(x.debit);return{...x,balance:running}});return{id:supplier.id,code:supplier.code,name:supplier.name,currency:supplier.currencyCode,opening,rows,closing:running}}
+
+const zero = new Prisma.Decimal(0);
+const settledBase = (payment: { baseAmount: Prisma.Decimal; discountBaseAmount: Prisma.Decimal; allocations: Array<{ carryingBaseAmount: Prisma.Decimal }> }) => payment.allocations.reduce((sum, allocation) => sum.add(allocation.carryingBaseAmount), zero);
+
+export async function supplierSummary(tenantId: string, from: Date, to: Date) {
+  const suppliers = await db.supplier.findMany({ where: { tenantId }, orderBy: { name: "asc" }, include: { bills: { where: { billDate: { lte: to }, status: { not: "VOIDED" } } }, creditNotes: { where: { creditDate: { lte: to } } }, payments: { where: { paymentDate: { lte: to } }, include: { allocations: true } } } });
+  return suppliers.map((supplier) => {
+    const activePayments = supplier.payments.filter((payment) => payment.chequeStatus !== "RETURNED");
+    const bills = supplier.bills.filter((item) => item.billDate >= from).reduce((sum, item) => sum.add(item.baseTotal), zero);
+    const credits = supplier.creditNotes.filter((item) => item.creditDate >= from).reduce((sum, item) => sum.add(item.baseTotal), zero);
+    const payments = activePayments.filter((item) => item.paymentDate >= from).reduce((sum, item) => sum.add(settledBase(item)), zero);
+    const outstanding = supplier.bills.reduce((sum, item) => sum.add(item.baseTotal), zero).sub(supplier.creditNotes.reduce((sum, item) => sum.add(item.baseTotal), zero)).sub(activePayments.reduce((sum, item) => sum.add(settledBase(item)), zero));
+    return { id: supplier.id, code: supplier.code, name: supplier.name, currency: supplier.currencyCode, bills, credits, payments, outstanding };
+  }).filter((item) => !item.bills.eq(0) || !item.credits.eq(0) || !item.payments.eq(0) || !item.outstanding.eq(0));
+}
+
+export async function supplierStatement(tenantId: string, supplierId: string, from: Date, to: Date) {
+  const supplier = await db.supplier.findFirst({ where: { id: supplierId, tenantId }, include: { bills: { where: { billDate: { lte: to }, status: { not: "VOIDED" } } }, creditNotes: { where: { creditDate: { lte: to } } }, payments: { where: { paymentDate: { lte: to } }, include: { allocations: true } } } });
+  if (!supplier) return null;
+  const activePayments = supplier.payments.filter((payment) => payment.chequeStatus !== "RETURNED");
+  const opening = supplier.bills.filter((item) => item.billDate < from).reduce((sum, item) => sum.add(item.baseTotal), zero)
+    .sub(supplier.creditNotes.filter((item) => item.creditDate < from).reduce((sum, item) => sum.add(item.baseTotal), zero))
+    .sub(activePayments.filter((item) => item.paymentDate < from).reduce((sum, item) => sum.add(settledBase(item)), zero));
+  const transactions = [
+    ...supplier.bills.filter((item) => item.billDate >= from).map((item) => ({ id: `bill-${item.id}`, date: item.billDate, type: item.isOpeningBalance ? "Opening bill" : "Purchase invoice", reference: item.reference, description: item.description ?? "Purchase invoice", debit: zero, credit: item.baseTotal })),
+    ...supplier.creditNotes.filter((item) => item.creditDate >= from).map((item) => ({ id: `credit-${item.id}`, date: item.creditDate, type: "Debit note", reference: item.reference, description: item.description, debit: item.baseTotal, credit: zero })),
+    ...activePayments.filter((item) => item.paymentDate >= from).map((item) => ({ id: `payment-${item.id}`, date: item.paymentDate, type: "Payment", reference: item.reference, description: item.discountBaseAmount.gt(0) ? `Supplier payment ${item.currency} ${Number(item.foreignAmount).toFixed(2)} + discount ${item.currency} ${Number(item.discountForeignAmount).toFixed(2)}` : "Supplier payment", debit: settledBase(item), credit: zero })),
+  ].sort((left, right) => left.date.getTime() - right.date.getTime() || left.reference.localeCompare(right.reference));
+  let running = opening;
+  const rows = transactions.map((item) => { running = running.add(item.credit).sub(item.debit); return { ...item, balance: running }; });
+  return { id: supplier.id, code: supplier.code, name: supplier.name, currency: supplier.currencyCode, opening, rows, closing: running };
+}
