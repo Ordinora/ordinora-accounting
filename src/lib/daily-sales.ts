@@ -1,8 +1,8 @@
 import "server-only";
 import { Prisma, StaffRole, TenderType } from "@prisma/client";
 import { parseMoneyToMinor } from "./accounting";
-import { db } from "./db";
 import { issueInventory } from "./inventory-ledger";
+import { runSerializableTransaction } from "./serializable-transaction";
 
 type Actor = { tenantId: string; userId: string; firmId: string; role: StaffRole | null };
 type SaleLine = { description: string; accountId: string; inventoryItemId?: string; inventoryLocationId?: string; quantity: string; unitPrice: string; discountType: "NONE" | "PERCENT" | "AMOUNT"; discountValue: string };
@@ -34,7 +34,7 @@ async function saveDailySale(input: DailySaleInput, existingId?: string, updateR
   const salesTotal = lines.reduce((sum, line) => sum.add(line.lineTotal), zero), tenderTotal = tenders.reduce((sum, tender) => sum.add(tender.amount), zero);
   if (!salesTotal.eq(tenderTotal)) throw new Error("Tender total must equal net sales after discount.");
 
-  return db.$transaction(async (tx) => {
+  return runSerializableTransaction(async (tx) => {
     const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: input.actor.tenantId } });
     const period = await tx.accountingPeriod.findFirst({ where: { tenantId: tenant.id, status: "OPEN", startsOn: { lte: input.registerDate }, endsOn: { gte: input.registerDate } } });
     if (!period) throw new Error("No open accounting period contains the selected sale date. Open the required period and try again.");
@@ -83,7 +83,7 @@ async function saveDailySale(input: DailySaleInput, existingId?: string, updateR
     await tx.dailyCashRegister.update({ where: { id: register.id }, data: { journalId: journal.id } });
     await tx.auditEvent.create({ data: { firmId: input.actor.firmId, tenantId: tenant.id, actorId: input.actor.userId, actorKind: "STAFF", action: existing ? "DAILY_CASH_REGISTER_VALUES_UPDATED" : "DAILY_CASH_REGISTER_POSTED", entityType: "DailyCashRegister", entityId: register.id, previousValues: existing ? { reference: existing.reference, salesTotal: existing.salesTotal.toString(), lineCount: existing.lines.length, tenderCount: existing.tenders.length } : undefined, newValues: { reference: input.reference, salesTotal: salesTotal.toString(), discountTotal: lines.reduce((sum, line) => sum.add(line.discountAmount), zero).toString(), inventoryLineCount: inventoryLines.length, lineCount: lines.length, tenderCount: tenders.length, journalId: journal.id }, reason: existing ? updateReason : undefined } });
     return register;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  });
 }
 
 export const postDailySale = (input: DailySaleInput) => saveDailySale(input);
