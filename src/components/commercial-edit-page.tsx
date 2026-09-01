@@ -1,2 +1,69 @@
-import Link from"next/link";import{notFound}from"next/navigation";import{Save,Trash2}from"lucide-react";import{AppShell}from"@/components/app-shell";import{db}from"@/lib/db";import{requireActiveTenant}from"@/lib/session";import{updatePurchase,updateSale}from"@/app/commercial/actions";
-export async function CommercialEditPage({kind,id}:{kind:"sale"|"purchase";id:string}){const{user,tenants,active}=await requireActiveTenant(),isSale=kind==="sale";const raw=isSale?await db.salesInvoice.findFirst({where:{id,tenantId:active.id},include:{customer:true,lines:true,allocations:true,creditNotes:true}}):await db.supplierBill.findFirst({where:{id,tenantId:active.id},include:{supplier:true,lines:true,allocations:true,creditNotes:true}});if(!raw)notFound();const party="customer"in raw?raw.customer:raw.supplier,documentDate="invoiceDate"in raw?raw.invoiceDate:raw.billDate,base=isSale?"sales":"purchases",action=isSale?updateSale:updatePurchase,linked=raw.allocations.length+raw.creditNotes.length;return <AppShell user={{displayName:user.displayName,email:user.email,role:user.staffRole?.replaceAll("_"," ")??"STAFF",firmName:user.firm.name}} tenants={tenants} activeTenant={active} pageTitle={`${isSale?"Sales invoice":"Supplier bill"} ${raw.reference}`} pageDescription="View and update the connected commercial transaction"><main className="module-page form-page"><form action={action} className="form-panel"><input type="hidden" name="id" value={raw.id}/><section className="form-section"><div className="section-heading"><h2>Document details</h2><p>Reference, due date, and description update the source document and journal together.</p></div><div className="form-grid"><label>{isSale?"Customer":"Supplier"}<input value={`${party.code} — ${party.name}`} readOnly/></label><label>Reference<input name="reference" required maxLength={40} defaultValue={raw.reference}/></label><label>Document date<input type="date" value={documentDate.toISOString().slice(0,10)} readOnly/></label><label>Due date<input name="dueDate" type="date" required defaultValue={raw.dueDate.toISOString().slice(0,10)}/></label><label className="span-2">Description<input name="description" required defaultValue={raw.description??`${isSale?"Sales invoice":"Supplier bill"} ${raw.reference}`}/></label><label className="span-2">Reason for update<input name="reason" required minLength={5} maxLength={240} placeholder="Explain what changed"/></label></div></section><section className="form-section"><div className="section-heading"><h2>Line items</h2><p>Amounts and inventory lines are read-only at this stage to protect historical costing.</p></div><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Description</th><th className="numeric">Quantity</th><th className="numeric">Unit price</th><th className="numeric">Total</th></tr></thead><tbody>{raw.lines.map(line=><tr key={line.id}><td>{line.description}</td><td className="numeric">{Number(line.quantity).toFixed(4)}</td><td className="numeric">{raw.currency} {Number(line.unitPrice).toFixed(2)}</td><td className="numeric">{raw.currency} {Number(line.lineTotal).toFixed(2)}</td></tr>)}</tbody></table></div><div className="document-total document-total-breakdown"><span>Subtotal <strong>{raw.currency} {Number(raw.foreignSubtotal).toFixed(2)}</strong></span><span>Document discount{raw.discountType==="PERCENT"?` (${Number(raw.discountValue).toFixed(2)}%)`:""} <strong>− {raw.currency} {Number(raw.discountAmount).toFixed(2)}</strong></span><span className="grand-total">Net amount <strong>{raw.currency} {Number(raw.foreignTotal).toFixed(2)}</strong></span></div></section><div className="form-actions"><Link href={`/${base}`} className="button-secondary">Cancel</Link><button className="button-primary" disabled={linked>0}><Save size={16}/>Save update</button>{raw.journalId&&<Link href={`/journals/${raw.journalId}#delete-transaction`} className="button-danger"><Trash2 size={15}/>Delete transaction</Link>}</div>{linked>0&&<p className="form-error">This document has {linked} linked settlement or credit-note record{linked===1?"":"s"}. Remove those links before updating it.</p>}</form></main></AppShell>}
+import { notFound } from "next/navigation";
+import { AppShell } from "@/components/app-shell";
+import { CommercialEditForm } from "@/components/commercial-edit-form";
+import { updatePurchase, updateSale } from "@/app/commercial/actions";
+import { db } from "@/lib/db";
+import { isPermittedPurchaseAccount, purchaseAccountTypes } from "@/lib/purchase-account-policy";
+import { requireActiveTenant } from "@/lib/session";
+
+export async function CommercialEditPage({ kind, id }: { kind: "sale" | "purchase"; id: string }) {
+  const { user, tenants, active } = await requireActiveTenant();
+  const isSale = kind === "sale";
+  const raw = isSale
+    ? await db.salesInvoice.findFirst({ where: { id, tenantId: active.id }, include: { customer: true, lines: true, allocations: true, creditNotes: true } })
+    : await db.supplierBill.findFirst({ where: { id, tenantId: active.id }, include: { supplier: true, lines: true, allocations: true, creditNotes: true } });
+  if (!raw) notFound();
+
+  const lineAccountIds = raw.lines.map((line) => "revenueAccountId" in line ? line.revenueAccountId : line.expenseAccountId);
+  const lineItemIds = raw.lines.flatMap((line) => line.inventoryItemId ? [line.inventoryItemId] : []);
+  const lineLocationIds = raw.lines.flatMap((line) => line.inventoryLocationId ? [line.inventoryLocationId] : []);
+  const [candidateAccounts, items, locations, mappingAccounts] = await Promise.all([
+    db.account.findMany({ where: { tenantId: active.id, type: isSale ? "REVENUE" : { in: purchaseAccountTypes }, OR: [{ isActive: true }, { id: { in: lineAccountIds } }] }, include: { _count: { select: { inventoryAssetItems: true } } }, orderBy: { code: "asc" } }),
+    db.inventoryItem.findMany({ where: { tenantId: active.id, OR: [{ isActive: true }, { id: { in: lineItemIds } }] }, orderBy: { sku: "asc" } }),
+    db.inventoryLocation.findMany({ where: { tenantId: active.id, OR: [{ isActive: true }, { id: { in: lineLocationIds } }] }, orderBy: { code: "asc" } }),
+    db.account.findMany({ where: { tenantId: active.id, isActive: true, type: { in: ["ASSET", "REVENUE", "EXPENSE"] } }, orderBy: { code: "asc" } }),
+  ]);
+  const accounts = isSale ? candidateAccounts : candidateAccounts.filter(isPermittedPurchaseAccount);
+  const party = "customer" in raw ? raw.customer : raw.supplier;
+  const documentDate = "invoiceDate" in raw ? raw.invoiceDate : raw.billDate;
+  const linked = raw.allocations.length + raw.creditNotes.length;
+  const sourceLocked = "salesOrderId" in raw ? Boolean(raw.salesOrderId || raw.quotationId) : Boolean(raw.purchaseOrderId);
+
+  return <AppShell
+    user={{ displayName: user.displayName, email: user.email, role: user.staffRole?.replaceAll("_", " ") ?? "STAFF", firmName: user.firm.name }}
+    tenants={tenants}
+    activeTenant={active}
+    pageTitle={`${isSale ? "Sales invoice" : "Supplier bill"} ${raw.reference}`}
+    pageDescription="View and update the connected commercial transaction"
+  ><main className="module-page form-page"><CommercialEditForm
+      kind={kind}
+      action={isSale ? updateSale : updatePurchase}
+      document={{
+        id: raw.id,
+        partyLabel: `${party.code} — ${party.name}`,
+        reference: raw.reference,
+        documentDate: documentDate.toISOString().slice(0, 10),
+        dueDate: raw.dueDate.toISOString().slice(0, 10),
+        description: raw.description ?? `${isSale ? "Sales invoice" : "Supplier bill"} ${raw.reference}`,
+        currency: raw.currency,
+        discountType: raw.discountType as "NONE" | "PERCENT" | "AMOUNT",
+        discountValue: raw.discountValue.toString(),
+        lines: raw.lines.map((line) => ({
+          description: line.description,
+          accountId: "revenueAccountId" in line ? line.revenueAccountId : line.expenseAccountId,
+          itemId: line.inventoryItemId ?? "",
+          locationId: line.inventoryLocationId ?? "",
+          quantity: line.quantity.toString(),
+          unitPrice: line.unitPrice.toString(),
+          discountPercent: line.discountPercent.toString(),
+        })),
+      }}
+      accounts={accounts}
+      items={items}
+      locations={locations}
+      mappingAccounts={mappingAccounts}
+      linked={linked}
+      sourceLocked={sourceLocked}
+      deleteHref={raw.journalId ? `/journals/${raw.journalId}#delete-transaction` : undefined}
+    /></main></AppShell>;
+}
