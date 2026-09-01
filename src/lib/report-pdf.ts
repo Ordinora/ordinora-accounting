@@ -2,10 +2,27 @@ type PdfRow = { label: string; detail?: string; amount?: string; strong?: boolea
 export type PdfSection = { title?: string; rows: PdfRow[] };
 export type ReportPdfInput = { company: string; title: string; subtitle: string; sections: PdfSection[] };
 
-const ascii = (value: string) => value.normalize("NFKD").replace(/[–—]/g, "-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[^\x20-\x7E]/g, "");
-const escapePdf = (value: string) => ascii(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+const winAnsiCharacters: Record<string, number> = {
+  "€": 0x80, "‚": 0x82, "ƒ": 0x83, "„": 0x84, "…": 0x85, "†": 0x86, "‡": 0x87,
+  "ˆ": 0x88, "‰": 0x89, "Š": 0x8a, "‹": 0x8b, "Œ": 0x8c, "Ž": 0x8e, "‘": 0x91,
+  "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97, "˜": 0x98,
+  "™": 0x99, "š": 0x9a, "›": 0x9b, "œ": 0x9c, "ž": 0x9e, "Ÿ": 0x9f,
+};
+const printable = (value: string) => Array.from(value.normalize("NFC"), (character) => {
+  const code = character.codePointAt(0) ?? 0;
+  return (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff) || character in winAnsiCharacters ? character : "?";
+}).join("");
+const escapePdf = (value: string) => Array.from(printable(value), (character) => {
+  const code = character.codePointAt(0) ?? 0x3f;
+  const byte = winAnsiCharacters[character] ?? code;
+  if (byte > 0x7e) return `\\${byte.toString(8).padStart(3, "0")}`;
+  if (character === "\\") return "\\\\";
+  if (character === "(") return "\\(";
+  if (character === ")") return "\\)";
+  return character;
+}).join("");
 const text = (value: string, x: number, y: number, size = 10, bold = false) => `BT /${bold ? "F2" : "F1"} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${escapePdf(value)}) Tj ET`;
-const right = (value: string, y: number, bold = false) => text(value, Math.max(360, 545 - ascii(value).length * (bold ? 5.7 : 5.2)), y, 10, bold);
+const right = (value: string, y: number, bold = false) => text(value, Math.max(360, 545 - printable(value).length * (bold ? 5.7 : 5.2)), y, 10, bold);
 
 export function generateReportPdf(input: ReportPdfInput) {
   const pages: string[][] = [[]];
@@ -40,8 +57,8 @@ export function generateReportPdf(input: ReportPdfInput) {
 
   const objects: string[] = [""];
   objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
-  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
-  objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
+  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
+  objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
   const kids: string[] = [];
   pages.forEach((commands, index) => {
     const contentId = 5 + index * 2, pageId = contentId + 1, stream = commands.join("\n");

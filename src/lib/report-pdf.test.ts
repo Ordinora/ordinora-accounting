@@ -23,4 +23,13 @@ describe("generateReportPdf", () => {
     expect(source).toContain("Page 1 of 1");
     expect(source).not.toContain("Page 2 of");
   });
+
+  it("encodes WinAnsi text and visibly substitutes unsupported characters", () => {
+    const pdf = generateReportPdf({ company: "Café Société €", title: "Laporan 測試", subtitle: "Résumé", sections: [{ rows: [{ label: "Crème brûlée", amount: "BND 10.00" }] }] });
+    const source = Buffer.from(pdf).toString("ascii");
+    expect(source).toContain("/Encoding /WinAnsiEncoding");
+    expect(source).toContain("Caf\\351 Soci\\351t\\351 \\200");
+    expect(source).toContain("R\\351sum\\351");
+    expect(source).toContain("Laporan ??");
+  });
 });
