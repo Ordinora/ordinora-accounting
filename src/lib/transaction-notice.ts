@@ -18,6 +18,11 @@ export const transactionNoticeMessages = {
   "payroll-run": "Payroll run posted successfully.",
   "payroll-payment": "Payroll payment posted successfully.",
   reconciliation: "Bank reconciliation finalized successfully.",
+  "client-switched": "Current client switched successfully.",
+  "portal-settings-saved": "Client portal settings saved successfully.",
+  "client-user-created": "Client user created successfully.",
+  "client-user-updated": "Client user access updated successfully.",
+  "client-password-reset": "Client password reset successfully. Active sessions were signed out.",
 } as const;
 
 export type TransactionNoticeCode = keyof typeof transactionNoticeMessages;

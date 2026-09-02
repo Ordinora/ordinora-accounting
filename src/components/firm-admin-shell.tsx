@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Building2, LayoutDashboard, LogOut, ShieldCheck, Users } from "lucide-react";
 import { logout } from "@/app/actions";
+import { OrdinoraEmblem } from "@/components/ordinora-emblem";
 
 type FirmAdminUser = {
   displayName: string;
@@ -28,7 +29,7 @@ export function FirmAdminShell({
 
   return <div className="firm-admin-shell">
     <aside className="firm-admin-sidebar">
-      <div className="sidebar-brand"><span className="logo-circle">O</span><div><strong>Ordinora</strong><small>ACCOUNTING</small></div></div>
+      <div className="sidebar-brand"><span className="logo-circle"><OrdinoraEmblem className="ordinora-emblem" /></span><div><strong>Ordinora</strong><small>ACCOUNTING</small></div></div>
       <p className="practice-name">{user.firmName}</p>
       <nav aria-label="Firm administration">
         <Link href="/" className={pathname === "/" ? "active" : ""}><LayoutDashboard size={18}/>Administrator dashboard</Link>

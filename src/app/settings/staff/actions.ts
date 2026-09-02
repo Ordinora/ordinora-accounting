@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { clientAssignmentNotificationDrafts } from "@/lib/notification-plans";
+import { createNotifications } from "@/lib/notifications";
+import { newlyAssignedTenantIds } from "@/lib/notification-rules";
 import { requireStaff } from "@/lib/session";
 import { assertMayChangeStaffRole, assertMayChangeStaffStatus, editableStaffRoles, uniqueStaffTenantIds } from "@/lib/staff-management";
 
@@ -87,6 +90,7 @@ export async function updateAccountingStaff(formData: FormData) {
   const duplicate = await db.user.findFirst({ where: { firmId: administrator.firmId, email: { equals: parsed.data.email, mode: "insensitive" }, id: { not: target.id } }, select: { id: true } });
   if (duplicate) redirect(`${errorPath}?error=A+user+with+this+email+already+exists.`);
   const previousTenantIds = target.assignments.map((assignment) => assignment.tenantId).sort();
+  const addedTenantIds = newlyAssignedTenantIds(previousTenantIds, tenantIds);
   await db.$transaction(async (tx) => {
     const updated = await tx.user.update({ where: { id: target.id }, data: { displayName: parsed.data.displayName, email: parsed.data.email, staffRole: parsed.data.staffRole } });
     if (target.staffRole !== "SYSTEM_ADMIN") {
@@ -95,6 +99,12 @@ export async function updateAccountingStaff(formData: FormData) {
     }
     await tx.auditEvent.create({ data: { firmId: administrator.firmId, actorId: administrator.id, actorKind: "STAFF", action: "STAFF_USER_UPDATED", entityType: "User", entityId: target.id, previousValues: { displayName: target.displayName, email: target.email, role: target.staffRole, tenantIds: previousTenantIds }, newValues: { displayName: updated.displayName, email: updated.email, role: updated.staffRole, tenantIds: [...tenantIds].sort() }, reason: parsed.data.reason } });
   });
+  try {
+    const newlyAssignedTenants = await db.tenant.findMany({ where: { firmId: administrator.firmId, id: { in: addedTenantIds } }, select: { id: true, legalName: true } });
+    await createNotifications(clientAssignmentNotificationDrafts({ firmId: administrator.firmId, recipientId: target.id, previousTenantIds, tenants: newlyAssignedTenants }));
+  } catch (notificationError) {
+    console.error("Client assignment notifications could not be created.", notificationError);
+  }
   revalidatePath("/settings/staff");
   revalidatePath(errorPath);
   redirect("/settings/staff?success=Staff+details+updated.");

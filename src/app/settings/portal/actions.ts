@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireActiveTenant } from "@/lib/session";
+import { withTransactionNotice } from "@/lib/transaction-notice";
 
 const portalSettingsSchema = z.object({
   portalEnabled: z.boolean(),
@@ -48,6 +50,7 @@ export async function updatePortalSettings(formData: FormData) {
   });
 
   revalidatePath("/settings/portal");
+  redirect(withTransactionNotice("/settings/portal", "portal-settings-saved"));
 }
 
 export type ClientUserState = { error?: string; success?: string };
@@ -66,16 +69,16 @@ export async function createClientUser(_state: ClientUserState, formData: FormDa
     const duplicate = await db.user.count({ where: { firmId: user.firmId, email: { equals: input.email, mode: "insensitive" } } });
     if (duplicate) throw new Error("A user with this email address already exists.");
     const passwordHash = await bcrypt.hash(input.password, 12);
-    const created = await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       const client = await tx.user.create({ data: { firmId: user.firmId, tenantId: active.id, kind: "CLIENT", displayName: input.displayName, email: input.email, passwordHash, clientRole: input.clientRole } });
       await tx.auditEvent.create({ data: { firmId: user.firmId, tenantId: active.id, actorId: user.id, actorKind: "STAFF", action: "CLIENT_USER_CREATED", entityType: "User", entityId: client.id, newValues: { email: client.email, clientRole: client.clientRole } } });
       return client;
     });
-    revalidatePath("/settings/portal");
-    return { success: `${created.displayName} can now sign in through the client portal.` };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "The client user could not be created." };
   }
+  revalidatePath("/settings/portal");
+  redirect(withTransactionNotice("/settings/portal", "client-user-created"));
 }
 
 export async function updateClientUser(userId: string, formData: FormData) {
@@ -91,4 +94,49 @@ export async function updateClientUser(userId: string, formData: FormData) {
   ]);
   if (!isActive) await db.session.updateMany({ where: { userId: client.id, revokedAt: null }, data: { revokedAt: new Date() } });
   revalidatePath("/settings/portal");
+  redirect(withTransactionNotice("/settings/portal", "client-user-updated"));
+}
+
+const clientPasswordSchema = z.object({
+  password: z.string().min(12, "Use at least 12 characters.").max(128),
+});
+
+export async function resetClientUserPassword(userId: string, _state: ClientUserState, formData: FormData): Promise<ClientUserState> {
+  try {
+    const { user, active } = await requireActiveTenant();
+    if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) {
+      throw new Error("Your role cannot reset client passwords.");
+    }
+
+    const { password } = clientPasswordSchema.parse({ password: formData.get("password") });
+    const client = await db.user.findFirst({
+      where: { id: userId, firmId: user.firmId, tenantId: active.id, kind: "CLIENT" },
+      select: { id: true, displayName: true, email: true },
+    });
+    if (!client) throw new Error("Client user not found for this company.");
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    await db.$transaction([
+      db.user.update({ where: { id: client.id }, data: { passwordHash } }),
+      db.session.updateMany({ where: { userId: client.id, revokedAt: null }, data: { revokedAt: new Date() } }),
+      db.auditEvent.create({
+        data: {
+          firmId: user.firmId,
+          tenantId: active.id,
+          actorId: user.id,
+          actorKind: "STAFF",
+          action: "CLIENT_USER_PASSWORD_RESET",
+          entityType: "User",
+          entityId: client.id,
+          newValues: { email: client.email, passwordReset: true, activeSessionsRevoked: true },
+        },
+      }),
+    ]);
+
+  } catch (error) {
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Enter a valid password." };
+    return { error: error instanceof Error ? error.message : "The client password could not be reset." };
+  }
+  revalidatePath("/settings/portal");
+  redirect(withTransactionNotice("/settings/portal", "client-password-reset"));
 }

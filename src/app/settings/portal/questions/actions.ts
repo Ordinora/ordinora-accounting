@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { clientQuestionNotificationDrafts } from "@/lib/notification-plans";
+import { clientNotificationRecipientIds, createNotifications } from "@/lib/notifications";
 import { requireActiveTenant } from "@/lib/session";
 import { assertCanAccessAdministrationFeature } from "@/lib/staff-access";
 
@@ -29,6 +31,21 @@ export async function staffQuestionReply(questionId: string, formData: FormData)
       },
     }),
   ]);
+  try {
+    const recipientIds = await clientNotificationRecipientIds(user.firmId, active.id);
+    await createNotifications(clientQuestionNotificationDrafts({
+        firmId: user.firmId,
+        tenantId: active.id,
+        recipientIds,
+        questionId: question.id,
+        subject: question.subject,
+        actorName: user.displayName,
+        clientVisible: question.clientVisible,
+        internalOnly,
+    }));
+  } catch (notificationError) {
+    console.error("Staff question reply notifications could not be created.", notificationError);
+  }
   redirect(`/settings/portal/questions/${question.id}`);
 }
 

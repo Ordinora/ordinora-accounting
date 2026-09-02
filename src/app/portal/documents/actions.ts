@@ -7,6 +7,8 @@ import { validateAccountingFile } from "@/lib/document-file";
 import { deleteDocument } from "@/lib/document-store";
 import { quarantineAndScanDocument } from "@/lib/document-storage";
 import { documentUploadsEnabled } from "@/lib/operational-config";
+import { createNotifications, staffNotificationRecipientIds } from "@/lib/notifications";
+import { documentNotificationDrafts } from "@/lib/notification-plans";
 import { requireClient } from "@/lib/session";
 
 export type ClientDocumentUploadState = { error?: string; success?: string };
@@ -30,9 +32,24 @@ export async function uploadClientDocument(_state: ClientDocumentUploadState, fo
       await tx.auditEvent.create({ data: { firmId: user.firmId, tenantId: tenant.id, actorId: user.id, actorKind: "CLIENT", action: stored.released ? "PORTAL_DOCUMENT_UPLOADED" : "DOCUMENT_QUARANTINED", entityType: "Document", entityId: record.id, newValues: { filename: record.originalName, contentType: record.contentType, sizeBytes: record.sizeBytes, scanEngine: stored.scan.engine, scanResult: stored.scan.result } } });
       return record;
     });
+    try {
+      const recipientIds = await staffNotificationRecipientIds(user.firmId, tenant.id);
+      await createNotifications(documentNotificationDrafts({
+        firmId: user.firmId,
+        tenantId: tenant.id,
+        recipientIds,
+        tenantName: tenant.legalName,
+        actorName: user.displayName,
+        documentId: document.id,
+        filename: document.originalName,
+        released: stored.released,
+      }));
+    } catch (notificationError) {
+      console.error("Document upload notifications could not be created.", notificationError);
+    }
     revalidatePath("/portal/documents");
     revalidatePath("/settings/portal/documents");
-    if (!stored.released) return { error: "The file did not pass the security scan and was quarantined. Your accountant has been notified in the audit trail." };
+    if (!stored.released) return { error: "The file did not pass the security scan and was quarantined. Your accountant has been notified." };
     return { success: `${document.originalName} passed the security scan and was sent securely to your accountant.` };
   } catch (error) {
     if (storedKey) await deleteDocument(storedKey).catch(() => undefined);

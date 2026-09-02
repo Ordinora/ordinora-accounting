@@ -224,6 +224,13 @@ enum QuestionStatus {
   REOPENED
 }
 
+enum NotificationEmailStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 enum TaxWorkingStatus {
   DRAFT
   PREPARING
@@ -308,6 +315,7 @@ model Firm {
   users         User[]
   tenants       Tenant[]
   loginAttempts LoginAttempt[]
+  notifications Notification[]
 }
 
 model User {
@@ -345,6 +353,7 @@ model User {
   createdSalesOrders              SalesOrder[]            @relation("SalesOrderCreator")
   createdSupplierQuotations       SupplierQuotation[]     @relation("SupplierQuotationCreator")
   createdPurchaseOrders           PurchaseOrder[]         @relation("PurchaseOrderCreator")
+  notifications                   Notification[]
 
   @@unique([firmId, email])
   @@index([tenantId])
@@ -463,6 +472,7 @@ model Tenant {
   monthEndChecklistItems        MonthEndChecklistItem[]
   openingPayrollYtd             OpeningPayrollYtd[]
   referenceSequences            ReferenceSequence[]
+  notifications                 Notification[]
 
   @@unique([firmId, legalName])
 }
@@ -2046,6 +2056,30 @@ model QuestionMessage {
   question     Question @relation(fields: [questionId], references: [id])
 
   @@index([questionId, createdAt])
+}
+
+model Notification {
+  id                String                  @id @default(cuid())
+  firmId            String
+  tenantId          String?
+  recipientId       String
+  type              String
+  title             String
+  body              String
+  linkPath          String
+  relatedEntityType String?
+  relatedEntityId   String?
+  isRead            Boolean                 @default(false)
+  readAt            DateTime?
+  emailStatus       NotificationEmailStatus @default(PENDING)
+  createdAt         DateTime                @default(now())
+  firm              Firm                    @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  tenant            Tenant?                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recipient         User                    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, isRead, createdAt])
+  @@index([firmId, tenantId, createdAt])
+  @@index([relatedEntityType, relatedEntityId])
 }
 
 model AuditEvent {

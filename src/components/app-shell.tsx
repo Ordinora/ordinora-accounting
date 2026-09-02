@@ -4,10 +4,12 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, BookOpen, ChevronDown, Landmark, LayoutDashboard, LogOut, Menu,
+  BarChart3, BookOpen, Building2, ChevronDown, Landmark, LayoutDashboard, LogOut, Menu,
   Package, ReceiptText, Search, Settings, ShoppingCart, Sparkles, Users, X,
 } from "lucide-react";
 import { logout, selectTenant } from "@/app/actions";
+import { OrdinoraEmblem } from "@/components/ordinora-emblem";
+import { NotificationBell } from "@/components/notification-bell";
 import { navigationModulesForRole, type NavigationModule } from "@/lib/navigation-modules";
 import { TransactionNotification } from "@/components/transaction-notification";
 
@@ -52,6 +54,7 @@ export function AppShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [signoutOpen, setSignoutOpen] = useState(false);
+  const [switchingClient, setSwitchingClient] = useState("");
   const initials = user.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 
   return (
@@ -60,7 +63,7 @@ export function AppShell({
       {drawerOpen && <button className="drawer-backdrop" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} />}
       <aside className={`omps-sidebar ${drawerOpen ? "drawer-open" : ""}`}>
         <div className="sidebar-brand">
-          <span className="logo-circle">O</span>
+          <span className="logo-circle"><OrdinoraEmblem className="ordinora-emblem" /></span>
           <div><strong>Ordinora</strong><small>ACCOUNTING</small></div>
           <button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close menu"><X /></button>
         </div>
@@ -99,6 +102,7 @@ export function AppShell({
             <div><h1>{pageTitle}</h1><p>{pageDescription}</p></div>
           </div>
           <div className="header-tools">
+            <NotificationBell audience="staff" />
             <label className="page-search"><Search size={16} /><span className="sr-only">Search current page</span><input placeholder="Search current page" /></label>
             <div className="profile-wrap">
               <button className="profile-button" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen}>
@@ -118,13 +122,35 @@ export function AppShell({
         </header>
 
         <div className="tenant-strip">
-          <form action={selectTenant}>
-            <label htmlFor="tenantId">Current client</label>
-            <select id="tenantId" name="tenantId" defaultValue={activeTenant.id}>
-              {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.legalName}</option>)}
-            </select>
-            <button>Switch</button>
-          </form>
+          <div className="current-client-display">
+            <span className="current-client-icon"><Building2 size={18} aria-hidden="true" /></span>
+            <span className="current-client-copy"><small>Current client</small><strong>{activeTenant.legalName}</strong></span>
+            <span className="current-client-status">Active</span>
+          </div>
+          {tenants.length > 1 && (
+            <form action={selectTenant} className="client-switch-form">
+              <label htmlFor="tenantId">Switch to another client</label>
+              <select
+                id="tenantId"
+                name="tenantId"
+                defaultValue=""
+                disabled={Boolean(switchingClient)}
+                onChange={(event) => {
+                  const selected = tenants.find((tenant) => tenant.id === event.currentTarget.value);
+                  setSwitchingClient(selected?.legalName ?? "selected client");
+                  event.currentTarget.form?.requestSubmit();
+                }}
+              >
+                <option value="" disabled>Select a client</option>
+                {tenants.filter((tenant) => tenant.id !== activeTenant.id).map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>{tenant.legalName}</option>
+                ))}
+              </select>
+              <span className="client-switch-help" role="status" aria-live="polite">
+                {switchingClient ? `Switching to ${switchingClient}...` : "Selection switches automatically"}
+              </span>
+            </form>
+          )}
         </div>
         <div className="omps-content">{children}</div>
       </section>
