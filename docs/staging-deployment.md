@@ -14,7 +14,7 @@ Staging must use fictional or anonymised data. It is a production-shaped accepta
 
 The current pilot runs on a Spaceship Ubuntu VPS. Spaceship SSH uses TCP 22022; TCP 80/443 are public. PostgreSQL port 5432, ClamAV port 3310, and application port 3000 must not be exposed publicly.
 
-The supplied `docker-compose.oracle-staging.yml` retains its historical filename for deployment compatibility. It runs Caddy, Ordinora, PostgreSQL 18, and an isolated ClamAV daemon. PostgreSQL data is bind-mounted from `/srv/ordinora/postgres`, and private documents are bind-mounted from `/srv/ordinora/documents`. Both directories must be included in backup and restore procedures. Local document storage is allowed only when both `DEPLOYMENT_ENV=staging` and `ALLOW_STAGING_LOCAL_STORAGE=true` are set. This exception is for the pilot; a production review must assess encrypted off-host object storage and backups.
+The supplied `docker-compose.oracle-staging.yml` retains its historical filename for deployment compatibility. It runs Caddy, Ordinora, PostgreSQL 18, and an isolated ClamAV daemon. PostgreSQL data uses the Compose-managed `ordinora_postgres` volume (currently materialised as `app_ordinora_postgres`), while private documents are bind-mounted from `/srv/ordinora/documents`. Both stores must be included in backup and restore procedures. Local document storage is allowed only when both `DEPLOYMENT_ENV=staging` and `ALLOW_STAGING_LOCAL_STORAGE=true` are set. This exception is for the pilot; a production review must assess encrypted off-host object storage and backups.
 
 ### VM deployment sequence
 
@@ -22,7 +22,7 @@ The supplied `docker-compose.oracle-staging.yml` retains its historical filename
 2. Install Docker Engine with the Compose plugin and enable its service.
 3. Copy the repository to `/opt/ordinora/app`, copy `.env.oracle-staging.example` to `.env.oracle-staging`, and replace every placeholder. Keep Compose interpolation values in the root `.env`. Restrict both populated files to the deployment administrator and never commit them.
 4. Generate secrets independently. The Server Actions key is `openssl rand -base64 32`; the other secrets can be generated with `openssl rand -hex 32`.
-5. Create `/srv/ordinora/postgres`, `/srv/ordinora/documents`, and `/srv/ordinora/backups` with ownership and permissions appropriate for their containers and the deployment administrator.
+5. Create `/srv/ordinora/documents` and `/srv/ordinora/backups` with ownership and permissions appropriate for the application and deployment administrator. Let Compose create and manage the `ordinora_postgres` database volume.
 6. Build the immutable application image: `docker build --pull -t ordinora:production .`.
 7. Validate the rendered stack: `docker compose --env-file .env -f docker-compose.oracle-staging.yml config --quiet`.
 8. Start only the database and scanner: `docker compose --env-file .env -f docker-compose.oracle-staging.yml up -d db clamav`, and wait for both health checks.
