@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { documentWorkflowStatuses, validateDocumentWorkflowChange } from "@/lib/document-workflow";
+import { rescanQuarantinedDocument } from "@/lib/document-storage";
 import { requireActiveTenantForMutation } from "@/lib/session";
 import { assertCanAccessAdministrationFeature } from "@/lib/staff-access";
 
@@ -50,4 +51,25 @@ export async function updateDocumentWorkflow(documentId: string, formData: FormD
   revalidatePath("/settings/portal/documents");
   revalidatePath("/portal/documents");
   redirect("/settings/portal/documents?updated=1");
+}
+
+export async function retryDocumentSecurityScan(documentId: string) {
+  try {
+    const { user, active } = await requireActiveTenantForMutation();
+    assertCanAccessAdministrationFeature(user.staffRole, "portal-documents");
+    const document = await db.document.findFirst({ where: { id: documentId, tenantId: active.id, status: "QUARANTINED" } });
+    if (!document) throw new Error("Quarantined document not found for this company.");
+    const rescanned = await rescanQuarantinedDocument({ storageKey: document.storageKey, contentType: document.contentType });
+    await db.$transaction([
+      db.document.update({ where: { id: document.id }, data: { storageKey: rescanned.storageKey, status: rescanned.released ? "UPLOADED" : "QUARANTINED", scannedAt: new Date(), scanEngine: rescanned.scan.engine, scanResult: rescanned.scan.result, quarantineReason: rescanned.scan.reason ?? null } }),
+      db.auditEvent.create({ data: { firmId: user.firmId, tenantId: active.id, actorId: user.id, actorKind: "STAFF", action: rescanned.released ? "DOCUMENT_SECURITY_SCAN_PASSED" : "DOCUMENT_SECURITY_SCAN_REJECTED", entityType: "Document", entityId: document.id, previousValues: { status: document.status, scanEngine: document.scanEngine, scanResult: document.scanResult }, newValues: { status: rescanned.released ? "UPLOADED" : "QUARANTINED", scanEngine: rescanned.scan.engine, scanResult: rescanned.scan.result } } }),
+    ]);
+    if (!rescanned.released) throw new Error(rescanned.scan.reason || "The document did not pass the security scan.");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The document could not be rescanned.";
+    redirect(`/settings/portal/documents?error=${encodeURIComponent(message)}`);
+  }
+  revalidatePath("/settings/portal/documents");
+  revalidatePath("/portal/documents");
+  redirect("/settings/portal/documents?rescanned=1");
 }

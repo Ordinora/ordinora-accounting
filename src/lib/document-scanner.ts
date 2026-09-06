@@ -2,8 +2,10 @@ import "server-only";
 
 import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
+import { clamAvResponseComplete, parseClamAvResponse } from "./clamav-protocol";
+import type { DocumentScanResult } from "./document-scanner-types";
 
-export type DocumentScanResult = { clean: boolean; engine: string; result: string; reason?: string };
+export type { DocumentScanResult } from "./document-scanner-types";
 
 export function basicDocumentScan(bytes: Uint8Array, contentType: string): DocumentScanResult {
   const ascii = Buffer.from(bytes).toString("latin1");
@@ -39,13 +41,13 @@ async function clamAvDaemonScan(bytes: Uint8Array): Promise<DocumentScanResult> 
     const finish = (error?: Error, result?: DocumentScanResult) => { if (settled) return; settled = true; socket.destroy(); if (error) reject(error); else resolve(result!); };
     socket.setTimeout(15_000, () => finish(new Error("The malware scanner timed out.")));
     socket.on("error", () => finish(new Error("The malware scanner is unavailable.")));
-    socket.on("data", (chunk) => { response += String(chunk); });
-    socket.on("end", () => {
-      const text = response.trim();
-      if (text.endsWith("OK")) finish(undefined, { clean: true, engine: "clamav-daemon", result: "CLEAN" });
-      else if (text.includes("FOUND")) finish(undefined, { clean: false, engine: "clamav-daemon", result: "MALWARE_DETECTED", reason: text.slice(0, 500) });
-      else finish(new Error("The malware scanner returned an invalid response."));
-    });
+    const evaluate = () => {
+      if (settled) return;
+      try { finish(undefined, parseClamAvResponse(response)); }
+      catch (error) { finish(error instanceof Error ? error : new Error("The malware scanner returned an invalid response.")); }
+    };
+    socket.on("data", (chunk) => { response += String(chunk); if (clamAvResponseComplete(response)) evaluate(); });
+    socket.on("end", evaluate);
     socket.on("connect", () => {
       socket.write("zINSTREAM\0");
       const buffer = Buffer.from(bytes);
