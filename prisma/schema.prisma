@@ -181,6 +181,13 @@ enum DocumentStatus {
   ARCHIVED
 }
 
+enum DocumentWorkflowStatus {
+  RECEIVED
+  UNDER_REVIEW
+  POSTED
+  REJECTED
+}
+
 enum AccountingDocumentType {
   PURCHASE_INVOICE
   SALES_INVOICE
@@ -1941,25 +1948,31 @@ model ReportVersion {
 }
 
 model Document {
-  id                 String              @id @default(cuid())
-  tenantId           String
-  uploadedById       String
-  originalName       String
-  storageKey         String              @unique
-  contentType        String
-  sizeBytes          Int
-  checksum           String
-  status             DocumentStatus      @default(SCAN_PENDING)
-  scannedAt          DateTime?
-  scanEngine         String?
-  scanResult         String?
-  quarantineReason   String?
-  createdAt          DateTime            @default(now())
-  tenant             Tenant              @relation(fields: [tenantId], references: [id])
-  questions          Question[]
-  accountingDocument AccountingDocument?
+  id                  String                 @id @default(cuid())
+  tenantId            String
+  uploadedById        String
+  originalName        String
+  storageKey          String                 @unique
+  contentType         String
+  sizeBytes           Int
+  checksum            String
+  status              DocumentStatus         @default(SCAN_PENDING)
+  scannedAt           DateTime?
+  scanEngine          String?
+  scanResult          String?
+  quarantineReason    String?
+  workflowStatus      DocumentWorkflowStatus @default(RECEIVED)
+  workflowReference   String?
+  workflowNote        String?
+  workflowUpdatedAt   DateTime?
+  workflowUpdatedById String?
+  createdAt           DateTime               @default(now())
+  tenant              Tenant                 @relation(fields: [tenantId], references: [id])
+  questions           Question[]
+  accountingDocument  AccountingDocument?
 
   @@index([tenantId, status])
+  @@index([tenantId, workflowStatus, createdAt])
 }
 
 model AccountingDocument {
