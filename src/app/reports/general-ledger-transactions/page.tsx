@@ -3,6 +3,7 @@ import { Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { generalLedgerReport } from "@/lib/general-ledger-report";
 import { formatCurrencyAmount } from "@/lib/currency";
+import { currentFinancialYearStart } from "@/lib/financial-year";
 import { requireActiveTenant } from "@/lib/session";
 import { journalSourceLabel } from "@/lib/journal-labels";
 
@@ -14,7 +15,7 @@ const money = formatCurrencyAmount;
 export default async function Page({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; accountId?: string }> }) {
   const query = await searchParams;
   const { user, tenants, active } = await requireActiveTenant();
-  const now = new Date(), from = parsed(query.from, new Date(Date.UTC(now.getUTCFullYear(), 0, 1))), to = parsed(query.to, now);
+  const now = new Date(), from = parsed(query.from, currentFinancialYearStart(active, now)), to = parsed(query.to, now);
   const accounts = await generalLedgerReport(active.id, from, to);
   const selectedId = accounts.some((row) => row.id === query.accountId) ? query.accountId : accounts[0]?.id;
   const rows = selectedId ? await generalLedgerReport(active.id, from, to, selectedId) : [], selected = rows[0];

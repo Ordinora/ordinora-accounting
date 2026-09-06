@@ -10,6 +10,7 @@ import { agedPayables, agedReceivables, inventoryValuation, ledgerBalances } fro
 import { requireActiveTenant } from "@/lib/session";
 import { publishReport } from "../publish-actions";
 import { formatCurrencyAmount } from "@/lib/currency";
+import { currentFinancialYearStart } from "@/lib/financial-year";
 
 export const dynamic = "force-dynamic";
 const zero = new Prisma.Decimal(0);
@@ -18,7 +19,7 @@ const date = (value: string | undefined, fallback: Date) => { if (!value) return
 
 export default async function Page({ params, searchParams }: { params: Promise<{ type: string }>; searchParams: Promise<{ from?: string; to?: string; asOf?: string }> }) {
   const { type } = await params, query = await searchParams, { user, tenants, active } = await requireActiveTenant();
-  const now = new Date(), asOf = date(query.asOf ?? query.to, now), from = date(query.from, new Date(now.getFullYear(), 0, 1));
+  const now = new Date(), asOf = date(query.asOf ?? query.to, now), from = date(query.from, currentFinancialYearStart(active, asOf));
   const names: Record<string, string> = { "trial-balance": "Trial Balance", "profit-loss": "Profit & Loss", "revenue-statement": "Revenue Statement", "balance-sheet": "Balance Sheet", receivables: "Aged Receivables", payables: "Aged Payables", inventory: "Inventory Valuation" };
   const title = names[type], shellUser = { displayName: user.displayName, email: user.email, role: user.staffRole?.replaceAll("_", " ") ?? "STAFF", firmName: user.firm.name };
   if (!title) return <AppShell user={shellUser} tenants={tenants} activeTenant={active} pageTitle="Report not found" pageDescription="Unknown report"><p>Report not found.</p></AppShell>;

@@ -7,12 +7,13 @@ import { z } from "zod";
 import { bruneiChart, controlRoleForChartCode } from "../../../../prisma/brunei-chart";
 import { monthlyAccountingPeriods } from "@/lib/company-setup";
 import { db } from "@/lib/db";
+import { validFinancialYearEnd } from "@/lib/financial-year";
 import { ACTIVE_TENANT_COOKIE, requireStaff } from "@/lib/session";
 
 export type CreateCompanyState = { error?: string };
 export type UpdateCompanyState = { error?: string };
 
-const schema = z.object({
+const baseSchema = z.object({
   legalName: z.string().trim().min(2).max(160), tradingName: z.string().trim().max(160), registrationNumber: z.string().trim().max(80),
   email: z.string().trim().max(254).refine((value) => value === "" || z.string().email().safeParse(value).success, "Enter a valid company email address."),
   entityType: z.enum(["PRIVATE_LIMITED", "SOLE_PROPRIETORSHIP", "PARTNERSHIP", "OTHER"]), registeredAddress: z.string().trim().max(500),
@@ -20,10 +21,21 @@ const schema = z.object({
   financialYearEndDay: z.coerce.number().int().min(1).max(31), setupYear: z.coerce.number().int().min(2000).max(2100), multiCurrencyEnabled: z.string().optional(),
 });
 
-const updateSchema = schema.omit({ setupYear: true }).extend({
+const validYearEnd = <T extends { financialYearEndMonth: number; financialYearEndDay: number }>(value: T) =>
+  validFinancialYearEnd(value.financialYearEndMonth, value.financialYearEndDay);
+
+const schema = baseSchema.refine(validYearEnd, {
+  message: "Enter a valid financial year-end month and day.",
+  path: ["financialYearEndDay"],
+});
+
+const updateSchema = baseSchema.omit({ setupYear: true }).extend({
   companyId: z.string().min(1),
   status: z.enum(["ACTIVE", "DORMANT"]),
   reason: z.string().trim().min(5, "Enter a short reason for the update.").max(240),
+}).refine(validYearEnd, {
+  message: "Enter a valid financial year-end month and day.",
+  path: ["financialYearEndDay"],
 });
 
 export async function createCompany(_state: CreateCompanyState, formData: FormData): Promise<CreateCompanyState> {
@@ -32,7 +44,7 @@ export async function createCompany(_state: CreateCompanyState, formData: FormDa
     const user = await requireStaff();
     if (user.staffRole !== "SYSTEM_ADMIN") throw new Error("Only the System Administrator can create companies.");
     const input = schema.parse(Object.fromEntries(formData));
-    const periods = monthlyAccountingPeriods(input.setupYear);
+    const periods = monthlyAccountingPeriods(input.setupYear, input);
     const duplicate = await db.tenant.count({ where: { firmId: user.firmId, legalName: { equals: input.legalName, mode: "insensitive" } } });
     if (duplicate) throw new Error("A company with this legal name already exists.");
     const created = await db.$transaction(async (tx) => {
@@ -46,7 +58,7 @@ export async function createCompany(_state: CreateCompanyState, formData: FormDa
       await tx.staffTenantAssignment.upsert({ where: { userId_tenantId: { userId: user.id, tenantId: tenant.id } }, update: {}, create: { userId: user.id, tenantId: tenant.id } });
       await tx.account.createMany({ data: bruneiChart.map(([code, name, type, reportingClassification, isControlAccount]) => ({ tenantId: tenant.id, code, name, type, reportingClassification, isControlAccount: Boolean(isControlAccount), controlRole: controlRoleForChartCode(code) })) });
       await tx.accountingPeriod.createMany({ data: periods.map((period) => ({ tenantId: tenant.id, ...period })) });
-      await tx.auditEvent.create({ data: { firmId: user.firmId, tenantId: tenant.id, actorId: user.id, actorKind: "STAFF", action: "COMPANY_CREATED", entityType: "Tenant", entityId: tenant.id, newValues: { legalName: tenant.legalName, email: tenant.email, setupYear: input.setupYear, accountsCreated: bruneiChart.length, periodsCreated: periods.length } } });
+      await tx.auditEvent.create({ data: { firmId: user.firmId, tenantId: tenant.id, actorId: user.id, actorKind: "STAFF", action: "COMPANY_CREATED", entityType: "Tenant", entityId: tenant.id, newValues: { legalName: tenant.legalName, email: tenant.email, financialYearEndMonth: input.financialYearEndMonth, financialYearEndDay: input.financialYearEndDay, firstFinancialYearEnding: input.setupYear, accountsCreated: bruneiChart.length, periodsCreated: periods.length } } });
       return tenant;
     });
     tenantId = created.id;

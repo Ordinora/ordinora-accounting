@@ -20,7 +20,7 @@ export default async function BankAccountPage({
 }) {
   const { id } = await params;
   const { user, tenants, active } = await requireActiveTenant();
-  const range = bankingDateRange(await searchParams);
+  const range = bankingDateRange(await searchParams, active);
   const account = await db.account.findFirst({
     where: { id, tenantId: active.id, type: "ASSET", reportingClassification: "Cash and cash equivalents" },
     include: {

@@ -3,6 +3,7 @@ import { Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
 import { formatCurrencyAmount } from "@/lib/currency";
+import { currentFinancialYearStart } from "@/lib/financial-year";
 import { payrollEntriesForPeriod, payrollEntryGross, payrollReportTotals } from "@/lib/payroll-reports";
 import { requireActiveTenant } from "@/lib/session";
 
@@ -12,7 +13,7 @@ const money = formatCurrencyAmount;
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ employeeId?: string; from?: string; to?: string }> }) {
   const query = await searchParams, { user, tenants, active } = await requireActiveTenant(), now = new Date();
-  const from = parsed(query.from, new Date(now.getFullYear(), 0, 1)), to = parsed(query.to, now);
+  const from = parsed(query.from, currentFinancialYearStart(active, now)), to = parsed(query.to, now);
   const employees = await db.employee.findMany({ where: { tenantId: active.id }, orderBy: { fullName: "asc" } });
   const employeeId = employees.some(employee => employee.id === query.employeeId) ? query.employeeId! : employees[0]?.id;
   const employee = employees.find(item => item.id === employeeId);

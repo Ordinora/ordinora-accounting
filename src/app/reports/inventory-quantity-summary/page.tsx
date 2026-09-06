@@ -3,6 +3,7 @@ import { Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { inventoryQuantityMovementSummary } from "@/lib/inventory-analysis";
 import { formatCurrencyAmount } from "@/lib/currency";
+import { currentFinancialYearStart } from "@/lib/financial-year";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ const shown = (value: Date) => value.toLocaleDateString("en-GB", { timeZone: "UT
 const money = formatCurrencyAmount;
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; asOf?: string }> }) {
-  const query = await searchParams, { user, tenants, active } = await requireActiveTenant(), to = date(query.to??query.asOf, new Date()), from = date(query.from, new Date(Date.UTC(to.getUTCFullYear(),to.getUTCMonth(),1))), rows = await inventoryQuantityMovementSummary(active.id, from, to), fromKey=from.toISOString().slice(0,10),toKey = to.toISOString().slice(0, 10), key = `from=${fromKey}&to=${toKey}`;
+  const query = await searchParams, { user, tenants, active } = await requireActiveTenant(), to = date(query.to??query.asOf, new Date()), from = date(query.from, currentFinancialYearStart(active, to)), rows = await inventoryQuantityMovementSummary(active.id, from, to), fromKey=from.toISOString().slice(0,10),toKey = to.toISOString().slice(0, 10), key = `from=${fromKey}&to=${toKey}`;
   return <AppShell user={{ displayName: user.displayName, email: user.email, role: user.staffRole?.replaceAll("_", " ") ?? "STAFF", firmName: user.firm.name }} tenants={tenants} activeTenant={active} pageTitle="Inventory Quantity Summary" pageDescription="Stock quantity, locations, average cost, and value by item">
     <main className="module-page">
       <div className="detail-toolbar"><Link href="/reports" className="back-link">← Report library</Link></div>

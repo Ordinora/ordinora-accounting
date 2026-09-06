@@ -40,20 +40,22 @@ describe("bank ledger calculations", () => {
 });
 
 describe("banking date range", () => {
-  it("defaults to six calendar months ending today", () => {
-    const range = bankingDateRange({}, new Date("2026-09-05T10:00:00.000Z"));
-    expect(range.fromInput).toBe("2026-04-01");
+  const februaryYearEnd = { financialYearEndMonth: 2, financialYearEndDay: 28 };
+
+  it("defaults to the company financial year ending today", () => {
+    const range = bankingDateRange({}, februaryYearEnd, new Date("2026-09-05T10:00:00.000Z"));
+    expect(range.fromInput).toBe("2026-03-01");
     expect(range.toInput).toBe("2026-09-05");
   });
 
   it("accepts ranges longer than twelve months for account statements", () => {
-    const range = bankingDateRange({ from: "2024-01-01", to: "2026-09-05" });
+    const range = bankingDateRange({ from: "2024-01-01", to: "2026-09-05" }, februaryYearEnd);
     expect(range.fromInput).toBe("2024-01-01");
     expect(range.to.toISOString()).toBe("2026-09-05T23:59:59.999Z");
   });
 
   it("normalizes an inverted range to the selected To date", () => {
-    const range = bankingDateRange({ from: "2026-09-10", to: "2026-09-05" });
+    const range = bankingDateRange({ from: "2026-09-10", to: "2026-09-05" }, februaryYearEnd);
     expect(range.fromInput).toBe("2026-09-05");
     expect(range.toInput).toBe("2026-09-05");
   });

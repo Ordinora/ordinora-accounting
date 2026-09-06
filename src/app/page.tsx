@@ -32,7 +32,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ f
     </main>
   </FirmAdminShell>;
   if (!active) return <main className="empty-state"><h1>No assigned clients</h1><p>Ask a firm administrator to assign a client to your account.</p><form action={logout}><button className="button-secondary">Sign out</button></form></main>;
-  const range = dashboardDateRange(await searchParams);
+  const range = dashboardDateRange(await searchParams, active);
   const postedInRange: Prisma.JournalWhereInput = { tenantId: active.id, status: { in: ["POSTED", "REVERSED"] }, accountingDate: { gte: range.from, lte: range.to } };
   const [journals, positionLines, activityLines, openPeriod, , trend, receivableRows, payableRows, customerRows] = await Promise.all([db.journal.findMany({ where: postedInRange, include: { lines: { include: { account: true } } }, orderBy: { createdAt: "desc" }, take: 8 }), db.journalLine.findMany({ where: { journal: { tenantId: active.id, status: { in: ["POSTED", "REVERSED"] }, accountingDate: { lte: range.to } } }, include: { account: true } }), db.journalLine.findMany({ where: { journal: { ...postedInRange, NOT: [{ source: "YEAR_END_CLOSE" }, { source: "REVERSAL", reversalOf: { source: "YEAR_END_CLOSE" } }] } }, include: { account: true } }), db.accountingPeriod.findFirst({ where: { tenantId: active.id, status: "OPEN" }, orderBy: { startsOn: "desc" } }), db.$transaction((tx)=>requireTradeControlAccounts(tx,active.id)), getBalanceTrendForRange(active.id, range.from, range.to), agedReceivables(active.id, range.to), agedPayables(active.id, range.to), customerSummary(active.id, range.from, range.to)]);
   for (const journal of journals) journal.description = journalDescriptionLabel(journal.source, journal.description);

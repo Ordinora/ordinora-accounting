@@ -3,6 +3,7 @@ import { Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { employeePayrollSummary, payrollEntriesForPeriod, payrollReportTotals } from "@/lib/payroll-reports";
 import { formatCurrencyAmount } from "@/lib/currency";
+import { currentFinancialYearStart } from "@/lib/financial-year";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
   const query = await searchParams;
   const { user, tenants, active } = await requireActiveTenant();
   const now = new Date();
-  const from = date(query.from, new Date(now.getFullYear(), 0, 1));
+  const from = date(query.from, currentFinancialYearStart(active, now));
   const to = date(query.to, now);
   const entries = await payrollEntriesForPeriod(active.id, from, to);
   const rows = employeePayrollSummary(entries);

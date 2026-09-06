@@ -28,7 +28,7 @@ export default async function ClientPortalPage({ searchParams }: { searchParams:
   const showProfit = liveAccess && enabled.has("profit");
   const showReceivables = liveAccess && enabled.has("receivables");
   const needsTrend = showRevenue || showProfit;
-  const range = dashboardDateRange(await searchParams);
+  const range = dashboardDateRange(await searchParams, tenant);
   const postedInRange: Prisma.JournalWhereInput = { tenantId: tenant.id, status: { in: ["POSTED", "REVERSED"] }, accountingDate: { gte: range.from, lte: range.to } };
 
   const [reports, positionLines, activityLines, trend, receivables] = await Promise.all([

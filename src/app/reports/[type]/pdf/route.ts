@@ -15,6 +15,7 @@ import { employeePayrollSummary, payrollEntriesForPeriod, payrollEntryGross, pay
 import { agedPayables, agedReceivables, inventoryValuation, ledgerBalances } from "@/lib/reports";
 import { requireActiveTenant } from "@/lib/session";
 import { formatCurrencyAmount } from "@/lib/currency";
+import { currentFinancialYearStart } from "@/lib/financial-year";
 import { salesByCustomer, salesByItem } from "@/lib/sales-reports";
 import { supplierStatement, supplierSummary } from "@/lib/supplier-reports";
 
@@ -28,7 +29,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
   const { active } = await requireActiveTenant();
   const url = new URL(request.url), now = new Date();
   const asOf = parseDate(url.searchParams.get("asOf") ?? url.searchParams.get("to"), now);
-  const from = parseDate(url.searchParams.get("from"), new Date(now.getFullYear(), 0, 1));
+  const from = parseDate(url.searchParams.get("from"), currentFinancialYearStart(active, now));
   const amount = (value: Prisma.Decimal) => formatCurrencyAmount(active.defaultCurrency, value);
   let title = "", subtitle = "", sections: PdfSection[] = [];
 

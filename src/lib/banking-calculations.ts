@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { financialYearDateRange, type FinancialYearSettings } from "./financial-year";
 
 export type BankLedgerInput = {
   id: string;
@@ -24,24 +25,8 @@ export type BankingDateRange = {
   toInput: string;
 };
 
-const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-const inputValue = (date: Date) => date.toISOString().slice(0, 10);
-
-function parsedDate(value: string | undefined, endOfDay: boolean) {
-  if (!value || !datePattern.test(value)) return null;
-  const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
-  return Number.isNaN(date.getTime()) || inputValue(date) !== value ? null : date;
-}
-
-export function bankingDateRange(query: { from?: string; to?: string }, now = new Date()): BankingDateRange {
-  const defaultTo = new Date(now);
-  const defaultFrom = new Date(Date.UTC(defaultTo.getUTCFullYear(), defaultTo.getUTCMonth() - 5, 1));
-  const to = parsedDate(query.to, true) ?? defaultTo;
-  let from = parsedDate(query.from, false) ?? defaultFrom;
-
-  if (from > to) from = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
-
-  return { from, to, fromInput: inputValue(from), toInput: inputValue(to) };
+export function bankingDateRange(query: { from?: string; to?: string }, settings: FinancialYearSettings, now = new Date()): BankingDateRange {
+  return financialYearDateRange(query, settings, now);
 }
 
 export function calculateBankLedger(lines: BankLedgerInput[], range: BankLedgerRange = {}) {

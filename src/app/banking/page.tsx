@@ -11,7 +11,7 @@ const money = (code: string, value: { toString(): string }) => code + " " + Numb
 
 export default async function BankingPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const { user, tenants, active } = await requireActiveTenant();
-  const range = bankingDateRange(await searchParams);
+  const range = bankingDateRange(await searchParams, active);
   const accounts = await db.account.findMany({
     where: { tenantId: active.id, type: "ASSET", reportingClassification: "Cash and cash equivalents" },
     include: {

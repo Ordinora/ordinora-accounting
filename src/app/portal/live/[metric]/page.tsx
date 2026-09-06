@@ -19,8 +19,8 @@ export default async function LiveDrilldownPage({ params, searchParams }: { para
 
   if (tenant.reportMode !== "LIVE_POSTED_AND_PUBLISHED" || !tenant.enabledDashboardCards.includes(metric) || !names[metric]) notFound();
 
-  const latestLive = query.view === "live" || (!query.from && !query.to);
-  const range = dashboardDateRange(query);
+  const latestLive = query.view === "live";
+  const range = dashboardDateRange(query, tenant);
   const asOf = latestLive ? new Date() : range.to;
   const activityFrom = latestLive ? undefined : range.from;
   const isActivity = metric === "revenue" || metric === "profit";
