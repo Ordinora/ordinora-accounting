@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "./db";
 import { isSessionActive, SESSION_ABSOLUTE_LENGTH_MS, shouldTouchSession } from "./session-policy";
 import { requiresStaffMfaEnrollment } from "./staff-mfa-policy";
+import { assertTenantAllowsMutation } from "./tenant-status";
 
 const SESSION_COOKIE = "ordinora_session";
 const ACTIVE_TENANT_COOKIE = "ordinora_tenant";
@@ -120,6 +121,12 @@ export async function requireActiveTenant() {
   const { tenants, active } = await getAuthorizedTenant(user);
   if (!active) throw new Error("No authorized client is selected.");
   return { user, tenants, active };
+}
+
+export async function requireActiveTenantForMutation() {
+  const context = await requireActiveTenant();
+  assertTenantAllowsMutation(context.active);
+  return context;
 }
 
 export { ACTIVE_TENANT_COOKIE };

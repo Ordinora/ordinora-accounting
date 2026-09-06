@@ -4,10 +4,10 @@ import { InventoryCostingMethod } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { convertBalancesToFifoLayers } from "@/lib/inventory-ledger";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 export async function updateInventoryCostingMethod(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot change inventory costing settings.");
   const method = String(formData.get("method"));
   if (!Object.values(InventoryCostingMethod).includes(method as InventoryCostingMethod)) throw new Error("Select a valid inventory costing method.");

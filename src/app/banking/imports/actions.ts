@@ -5,14 +5,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { findExactStatementMatch, parseBankStatementCsv } from "@/lib/bank-statement";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 function authorize(role: string | null) { if (!role || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(role)) throw new Error("Your role cannot import bank statements."); }
 
 export type ImportStatementState = { error?: string };
 export async function importBankStatement(_state: ImportStatementState, formData: FormData): Promise<ImportStatementState> {
   let destination: string | undefined;
-  try { const { user, active } = await requireActiveTenant(); authorize(user.staffRole);
+  try { const { user, active } = await requireActiveTenantForMutation(); authorize(user.staffRole);
   const accountId = z.string().min(1).parse(formData.get("accountId")); const file = formData.get("statement");
   if (!(file instanceof File) || !file.name.toLowerCase().endsWith(".csv")) throw new Error("Select a CSV bank statement.");
   if (file.size < 1 || file.size > 2 * 1024 * 1024) throw new Error("Upload a non-empty CSV smaller than 2 MB.");
@@ -27,7 +27,7 @@ export async function importBankStatement(_state: ImportStatementState, formData
 }
 
 export async function updateStatementLine(formData: FormData) {
-  const { user, active } = await requireActiveTenant(); authorize(user.staffRole); const lineId = z.string().min(1).parse(formData.get("lineId")); const intent = z.enum(["match", "ignore", "unmatch"]).parse(formData.get("intent"));
+  const { user, active } = await requireActiveTenantForMutation(); authorize(user.staffRole); const lineId = z.string().min(1).parse(formData.get("lineId")); const intent = z.enum(["match", "ignore", "unmatch"]).parse(formData.get("intent"));
   const line = await db.bankStatementLine.findFirst({ where: { id: lineId, importedStatement: { tenantId: active.id } }, include: { importedStatement: true } }); if (!line) throw new Error("Statement line not found.");
   if (intent === "match") { const journalLineId = z.string().min(1).parse(formData.get("journalLineId")); const candidate = await db.journalLine.findFirst({ where: { id: journalLineId, accountId: line.importedStatement.accountId, bankStatementMatch: null, journal: { tenantId: active.id, status: "POSTED" } } }); if (!candidate || !candidate.debit.sub(candidate.credit).eq(line.amount)) throw new Error("The selected posting must belong to this account and equal the statement amount."); await db.bankStatementLine.update({ where: { id: line.id }, data: { status: "MATCHED", matchedJournalLineId: candidate.id } }); }
   else await db.bankStatementLine.update({ where: { id: line.id }, data: { status: intent === "ignore" ? "IGNORED" : "UNMATCHED", matchedJournalLineId: null } });

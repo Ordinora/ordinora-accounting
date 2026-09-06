@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 const schema = z.object({
   code: z.string().trim().min(1, "Enter a contact code.").max(20),
@@ -31,7 +31,7 @@ function createError(error: unknown, kind: ContactKind, code: string) {
 async function create(kind: ContactKind, _state: ContactCreateState, formData: FormData): Promise<ContactCreateState> {
   let submittedCode = "";
   try {
-    const { user, active } = await requireActiveTenant(); authorize(user.staffRole);
+    const { user, active } = await requireActiveTenantForMutation(); authorize(user.staffRole);
     const input = schema.parse(Object.fromEntries(formData)); submittedCode = input.code;
     const where = { tenantId: active.id, OR: [{ code: { equals: input.code, mode: "insensitive" as const } }, { name: { equals: input.name, mode: "insensitive" as const } }] };
     const existing = kind === "customer" ? await db.customer.findFirst({ where }) : await db.supplier.findFirst({ where });
@@ -49,7 +49,7 @@ export async function createSupplier(state: ContactCreateState, formData: FormDa
 export async function createQuickContact(kind: ContactKind, values: QuickContactInput): Promise<QuickContact> {
   let submittedCode = "";
   try {
-    const { user, active } = await requireActiveTenant(); authorize(user.staffRole);
+    const { user, active } = await requireActiveTenantForMutation(); authorize(user.staffRole);
     const input = schema.parse(values); submittedCode = input.code;
     const where = { tenantId: active.id, OR: [{ code: { equals: input.code, mode: "insensitive" as const } }, { name: { equals: input.name, mode: "insensitive" as const } }] };
     const existing = kind === "customer" ? await db.customer.findFirst({ where }) : await db.supplier.findFirst({ where });
@@ -63,7 +63,7 @@ export async function createQuickContact(kind: ContactKind, values: QuickContact
 }
 
 async function update(kind: ContactKind, formData: FormData) {
-  const { user, active } = await requireActiveTenant(); authorize(user.staffRole);
+  const { user, active } = await requireActiveTenantForMutation(); authorize(user.staffRole);
   const id = z.string().min(1).parse(formData.get("id")), input = schema.extend({ isActive: z.coerce.boolean().default(false), reason: z.string().trim().min(5).max(240) }).parse(Object.fromEntries(formData));
   const previous = kind === "customer" ? await db.customer.findFirst({ where: { id, tenantId: active.id } }) : await db.supplier.findFirst({ where: { id, tenantId: active.id } });
   if (!previous) throw new Error(`${kind} not found.`);
@@ -76,7 +76,7 @@ export async function updateCustomer(formData: FormData) { return update("custom
 export async function updateSupplier(formData: FormData) { return update("supplier", formData); }
 
 async function remove(kind: ContactKind, formData: FormData) {
-  const { user, active } = await requireActiveTenant(); authorize(user.staffRole);
+  const { user, active } = await requireActiveTenantForMutation(); authorize(user.staffRole);
   const id = z.string().min(1).parse(formData.get("id")), confirmation = z.string().trim().parse(formData.get("confirmation")), reason = z.string().trim().min(5).max(240).parse(formData.get("reason"));
   await db.$transaction(async (tx) => {
     const record = kind === "customer" ? await tx.customer.findFirst({ where: { id, tenantId: active.id }, include: { _count: { select: { invoices: true, receipts: true, creditNotes: true } } } }) : await tx.supplier.findFirst({ where: { id, tenantId: active.id }, include: { _count: { select: { bills: true, payments: true, creditNotes: true } } } });

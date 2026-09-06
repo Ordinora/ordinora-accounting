@@ -11,7 +11,7 @@ import { deleteDocument, readDocument } from "@/lib/document-store";
 import { quarantineAndScanDocument } from "@/lib/document-storage";
 import { processAccountingDocument } from "@/lib/document-processing";
 import { documentUploadsEnabled } from "@/lib/operational-config";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 export type UploadDocumentState = { error?: string };
 
@@ -27,7 +27,7 @@ export async function uploadAccountingDocument(_state: UploadDocumentState, form
   let createdId: string | undefined;
   try {
     if (!documentUploadsEnabled()) throw new Error("Document uploads are temporarily disabled for this deployment.");
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     authorize(user.staffRole);
     const requested = z.enum(requestedTypes).parse(formData.get("requestedType"));
     const file = formData.get("document");
@@ -60,7 +60,7 @@ export async function uploadAccountingDocument(_state: UploadDocumentState, form
 }
 
 export async function confirmAccountingDocument(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   authorize(user.staffRole);
   const id = z.string().min(1).parse(formData.get("accountingDocumentId"));
   const confirmedType = z.nativeEnum(AccountingDocumentType).parse(formData.get("confirmedType"));
@@ -77,7 +77,7 @@ export async function confirmAccountingDocument(formData: FormData) {
 }
 
 export async function retryAccountingDocument(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   authorize(user.staffRole);
   const id = z.string().min(1).parse(formData.get("accountingDocumentId"));
   const record = await db.accountingDocument.findFirst({ where: { id, tenantId: active.id }, include: { document: true } });
@@ -90,7 +90,7 @@ export async function retryAccountingDocument(formData: FormData) {
 }
 
 export async function cancelAccountingDocument(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   authorize(user.staffRole);
   const id = z.string().min(1).parse(formData.get("accountingDocumentId"));
   const record = await db.accountingDocument.findFirst({ where: { id, tenantId: active.id, status: { notIn: ["POSTED", "CANCELLED"] } } });

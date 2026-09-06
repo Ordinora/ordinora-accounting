@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { resolveReference } from "@/lib/reference-numbers";
 import { withTransactionNotice } from "@/lib/transaction-notice";
 
@@ -14,7 +14,7 @@ export type PayrollPaymentState = { error?: string };
 export async function postPayrollSettlement(_state: PayrollPaymentState, formData: FormData): Promise<PayrollPaymentState> {
   let runId = "";
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT", "PAYROLL_OFFICER"].includes(user.staffRole)) throw new Error("Your role cannot pay payroll runs.");
     const input = z.object({ runId: z.string().min(1), bankAccountId: z.string().min(1), reference: z.string().trim().max(40).default(""), autoReference: z.string().optional(), paymentDate: z.coerce.date(), amount: z.coerce.number().positive(), notes: z.string().trim().max(500).optional() }).parse(Object.fromEntries(formData));
     input.reference = await resolveReference({ tenantId: active.id, kind: "PAYROLL_PAYMENT", date: input.paymentDate, supplied: input.reference, auto: input.autoReference === "true" });

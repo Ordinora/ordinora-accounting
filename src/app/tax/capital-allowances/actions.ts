@@ -1,7 +1,7 @@
 "use server";
-import{revalidatePath}from"next/cache";import{redirect}from"next/navigation";import{z}from"zod";import{db}from"@/lib/db";import{requireActiveTenant}from"@/lib/session";
+import{revalidatePath}from"next/cache";import{redirect}from"next/navigation";import{z}from"zod";import{db}from"@/lib/db";import{requireActiveTenantForMutation}from"@/lib/session";
 const roles=["SYSTEM_ADMIN","FIRM_ADMIN","ACCOUNTANT","REVIEWER"];
-async function context(){const value=await requireActiveTenant();if(!value.user.staffRole||!roles.includes(value.user.staffRole))throw new Error("Your role cannot update capital-allowance working papers.");return value}
+async function context(){const value=await requireActiveTenantForMutation();if(!value.user.staffRole||!roles.includes(value.user.staffRole))throw new Error("Your role cannot update capital-allowance working papers.");return value}
 const optionalDate=z.preprocess(v=>v===""?undefined:v,z.coerce.date().optional());
 const schema=z.object({taxYearId:z.string().min(1),assetCode:z.string().trim().min(1).max(40),description:z.string().trim().min(2).max(180),category:z.string().trim().min(2).max(80),acquiredOn:optionalDate,originalCost:z.coerce.number().min(0),qualifyingAddition:z.coerce.number().min(0),taxWrittenDownValueBf:z.coerce.number().min(0),disposalDeduction:z.coerce.number().min(0),initialAllowanceRate:z.coerce.number().min(0).max(100),annualAllowanceRate:z.coerce.number().min(0).max(100),privateUsePercent:z.coerce.number().min(0).max(100),status:z.enum(["ACTIVE","DISPOSED","EXCLUDED"]),notes:z.string().trim().max(1000).optional()});
 function values(i:z.infer<typeof schema>){return{...i,acquiredOn:i.acquiredOn??null,notes:i.notes||null}}

@@ -5,10 +5,10 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { calculateFixedAssetBookValue } from "@/lib/fixed-assets";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 export async function postDepreciationRun(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot post depreciation.");
   const input = z.object({ depreciationDate: z.coerce.date() }).parse(Object.fromEntries(formData));
   const date = input.depreciationDate.toISOString().slice(0, 10);

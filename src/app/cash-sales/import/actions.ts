@@ -4,14 +4,14 @@ import { z } from "zod";
 import type { RetailImportState } from "@/components/retail-sales-import-form";
 import { db } from "@/lib/db";
 import { postDailyCashRegister } from "@/lib/daily-cash-sales";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { resolveReference } from "@/lib/reference-numbers";
 import { withTransactionNotice } from "@/lib/transaction-notice";
 const schema=z.object({reference:z.string().trim().max(40).default(""),autoReference:z.string().optional(),registerDate:z.coerce.date(),cashAccountId:z.string().min(1),branchLabel:z.string().trim().max(80),registerLabel:z.string().trim().max(80),openingFloat:z.string(),actualClosingCash:z.string(),cashAmount:z.string(),cardAmount:z.string(),cardAccountId:z.string(),bankAmount:z.string(),bankAccountId:z.string(),otherAmount:z.string(),otherAccountId:z.string(),skuColumn:z.string().min(1),locationColumn:z.string().min(1),quantityColumn:z.string().min(1),unitPriceColumn:z.string(),totalAmountColumn:z.string(),descriptionColumn:z.string()});
 function fields(row:string){const values:string[]=[];let value="",quoted=false;for(let i=0;i<row.length;i++){const char=row[i];if(char==='"'&&quoted&&row[i+1]==='"'){value+='"';i++}else if(char==='"')quoted=!quoted;else if(char===","&&!quoted){values.push(value.trim());value=""}else value+=char}values.push(value.trim());return values}
 export async function importRetailSales(_:RetailImportState,formData:FormData):Promise<RetailImportState>{
   try{
-    const{user,active}=await requireActiveTenant(),input=schema.parse(Object.fromEntries(formData)),file=formData.get("salesFile");
+    const{user,active}=await requireActiveTenantForMutation(),input=schema.parse(Object.fromEntries(formData)),file=formData.get("salesFile");
     input.reference=await resolveReference({tenantId:active.id,kind:"DAILY_SALE",date:input.registerDate,supplied:input.reference,auto:input.autoReference==="true"});
     const period=await db.accountingPeriod.findFirst({where:{tenantId:active.id,status:"OPEN",startsOn:{lte:input.registerDate},endsOn:{gte:input.registerDate}},orderBy:{startsOn:"desc"}});
     if(!period)throw new Error("The register date is not inside an open accounting period. Open that month under Administration → Accounting periods, or choose another date.");

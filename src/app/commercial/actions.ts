@@ -7,7 +7,7 @@ import { postCommercialDocument } from "@/lib/commercial";
 import { parseCommercialDiscount } from "@/lib/commercial-discount";
 import { updateCommercialDocument } from "@/lib/commercial-update";
 import { resolveReference } from "@/lib/reference-numbers";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { withTransactionNotice } from "@/lib/transaction-notice";
 
 const header = z.object({ partyId: z.string().min(1), reference: z.string().trim().max(40).default(""), autoReference: z.string().optional(), documentDate: z.coerce.date(), dueDate: z.coerce.date(), description: z.string().trim().min(2).max(240), discountInput: z.string().trim().max(32).default("") });
@@ -40,7 +40,7 @@ function parseLines(formData: FormData) {
 
 async function post(kind: "SALE" | "PURCHASE", _state: CommercialActionState, formData: FormData): Promise<CommercialActionState> {
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     const input = header.parse(Object.fromEntries(formData));
     const reference = await resolveReference({ tenantId: active.id, kind: kind === "SALE" ? "SALES_INVOICE" : "SUPPLIER_BILL", date: input.documentDate, supplied: input.reference, auto: input.autoReference === "true" });
     await postCommercialDocument({ kind, actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, partyId: input.partyId, reference, documentDate: input.documentDate, dueDate: input.dueDate, description: input.description, ...parseCommercialDiscount(input.discountInput), lines: parseLines(formData) });
@@ -50,7 +50,7 @@ async function post(kind: "SALE" | "PURCHASE", _state: CommercialActionState, fo
 
 async function update(kind: "SALE" | "PURCHASE", _state: CommercialActionState, formData: FormData): Promise<CommercialActionState> {
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     const input = updateSchema.parse(Object.fromEntries(formData));
     const { discountInput, ...details } = input;
     await updateCommercialDocument({ kind, actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, ...details, ...parseCommercialDiscount(discountInput), lines: parseLines(formData) });

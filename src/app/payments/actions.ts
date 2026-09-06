@@ -8,7 +8,7 @@ import { calculatePaymentAmounts } from "@/lib/payment-calculations";
 import { db } from "@/lib/db";
 import { postDirectPayment } from "@/lib/payments";
 import { resolveReference } from "@/lib/reference-numbers";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { withTransactionNotice } from "@/lib/transaction-notice";
 
 export type DirectPaymentActionState = {
@@ -40,7 +40,7 @@ function dateWindow(date: Date) {
 
 export async function createDirectPayment(_state: DirectPaymentActionState, formData: FormData): Promise<DirectPaymentActionState> {
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     const header = schema.parse(Object.fromEntries(formData));
     const accountIds = formData.getAll("lineAccountId").map(String), itemIds = formData.getAll("lineItemId").map(String), locationIds = formData.getAll("lineLocationId").map(String), descriptions = formData.getAll("lineDescription").map(String), quantities = formData.getAll("lineQuantity").map(String), unitPrices = formData.getAll("lineUnitPrice").map(String), discounts = formData.getAll("lineDiscountPercent").map(String);
     if (![itemIds.length, locationIds.length, descriptions.length, quantities.length, unitPrices.length, discounts.length].every((length) => length === accountIds.length)) throw new Error("Payment lines are incomplete.");
@@ -68,7 +68,7 @@ export async function createDirectPayment(_state: DirectPaymentActionState, form
 }
 
 export async function updateDirectPayment(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot update payments.");
   const input = z.object({ id: z.string().min(1), reference: z.string().trim().min(1).max(40), payee: z.string().trim().min(1).max(160), description: z.string().trim().max(500), reason: z.string().trim().min(5).max(240) }).parse(Object.fromEntries(formData));
   await db.$transaction(async (tx) => {

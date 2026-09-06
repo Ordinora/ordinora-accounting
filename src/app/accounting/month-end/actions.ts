@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { monthEndChecklistDefinition } from "@/lib/month-end-checklist";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 const inputSchema = z.object({
   periodId: z.string().min(1),
@@ -15,7 +15,7 @@ const inputSchema = z.object({
 });
 
 export async function updateMonthEndChecklist(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) {
     throw new Error("Your role cannot complete month-end controls.");
   }

@@ -5,11 +5,11 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { clientQuestionNotificationDrafts } from "@/lib/notification-plans";
 import { clientNotificationRecipientIds, createNotifications } from "@/lib/notifications";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { assertCanAccessAdministrationFeature } from "@/lib/staff-access";
 
 export async function staffQuestionReply(questionId: string, formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   assertCanAccessAdministrationFeature(user.staffRole, "client-questions");
   const body = z.string().trim().min(1).max(4000).parse(formData.get("body"));
   const internalOnly = formData.get("internalOnly") === "on";
@@ -50,7 +50,7 @@ export async function staffQuestionReply(questionId: string, formData: FormData)
 }
 
 export async function resolveQuestion(questionId: string) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   assertCanAccessAdministrationFeature(user.staffRole, "client-questions");
   const question = await db.question.findFirst({ where: { id: questionId, tenantId: active.id } });
   if (!question) throw new Error("Question not found for this company.");

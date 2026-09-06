@@ -13,7 +13,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { navigationModulesForRole, type NavigationModule } from "@/lib/navigation-modules";
 import { TransactionNotification } from "@/components/transaction-notification";
 
-type TenantOption = { id: string; legalName: string };
+type TenantOption = { id: string; legalName: string; status: "ACTIVE" | "DORMANT" };
 type ShellUser = { displayName: string; email: string; role: string; firmName: string };
 /* Module functions are rendered as cards in /modules/[key]. */
 const moduleIcons: Record<string, typeof ReceiptText> = {
@@ -125,7 +125,7 @@ export function AppShell({
           <div className="current-client-display">
             <span className="current-client-icon"><Building2 size={18} aria-hidden="true" /></span>
             <span className="current-client-copy"><small>Current client</small><strong>{activeTenant.legalName}</strong></span>
-            <span className="current-client-status">Active</span>
+            <span className={`current-client-status ${activeTenant.status.toLowerCase()}`}>{activeTenant.status}</span>
           </div>
           {tenants.length > 1 && (
             <form action={selectTenant} className="client-switch-form">
@@ -143,7 +143,7 @@ export function AppShell({
               >
                 <option value="" disabled>Select a client</option>
                 {tenants.filter((tenant) => tenant.id !== activeTenant.id).map((tenant) => (
-                  <option key={tenant.id} value={tenant.id}>{tenant.legalName}</option>
+                  <option key={tenant.id} value={tenant.id}>{tenant.legalName}{tenant.status === "DORMANT" ? " (Dormant)" : ""}</option>
                 ))}
               </select>
               <span className="client-switch-help" role="status" aria-live="polite">
@@ -152,6 +152,12 @@ export function AppShell({
             </form>
           )}
         </div>
+        {activeTenant.status === "DORMANT" && (
+          <div className="dormant-company-notice" role="status">
+            <strong>Dormant company — read-only</strong>
+            <span>Reports and historical records remain available. Reactivate this company under Administration → Companies before making changes or posting transactions.</span>
+          </div>
+        )}
         <div className="omps-content">{children}</div>
       </section>
 

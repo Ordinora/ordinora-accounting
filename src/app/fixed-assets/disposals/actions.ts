@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { calculateFixedAssetDisposal } from "@/lib/fixed-asset-disposal";
 import { calculateFixedAssetBookValue } from "@/lib/fixed-assets";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { withTransactionNotice } from "@/lib/transaction-notice";
 
 const schema = z.object({
@@ -20,7 +20,7 @@ const schema = z.object({
 });
 
 export async function postFixedAssetDisposal(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot dispose fixed assets.");
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(`/fixed-assets/disposals/new?error=${encodeURIComponent(parsed.error.issues[0]?.message ?? "Enter valid disposal details.")}`);

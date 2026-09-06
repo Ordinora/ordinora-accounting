@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { postDailySale, updateDailySale } from "@/lib/daily-sales";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { resolveReference } from "@/lib/reference-numbers";
 import { withTransactionNotice } from "@/lib/transaction-notice";
 
@@ -34,7 +34,7 @@ function saleValues(formData: FormData) {
 
 export async function postCashSales(_state: DailySaleActionState, formData: FormData): Promise<DailySaleActionState> {
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     const values=saleValues(formData),reference=await resolveReference({tenantId:active.id,kind:"DAILY_SALE",date:values.registerDate,supplied:values.reference,auto:values.autoReference==="true"});
     await postDailySale({ actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, reference,registerDate:values.registerDate,branchLabel:values.branchLabel,registerLabel:values.registerLabel,lines:values.lines,tenders:values.tenders });
     return { redirectTo: withTransactionNotice("/cash-sales", "cash-sale") };
@@ -43,7 +43,7 @@ export async function postCashSales(_state: DailySaleActionState, formData: Form
 
 export async function updateCashSales(_state: DailySaleActionState, formData: FormData): Promise<DailySaleActionState> {
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot update daily sales.");
     const { id, reason } = z.object({ id: z.string().min(1), reason: z.string().trim().min(5).max(240) }).parse(Object.fromEntries(formData));
     await updateDailySale({ actor: { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole }, id, reason, ...saleValues(formData) });

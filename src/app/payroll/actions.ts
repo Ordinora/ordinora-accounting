@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { approvePayrollRun, postPayrollRun, preparePayrollRun } from "@/lib/payroll";
 import { resolveReference } from "@/lib/reference-numbers";
 import { withTransactionNotice } from "@/lib/transaction-notice";
@@ -30,7 +30,7 @@ const employeeSchema = z.object({
 });
 
 export async function createEmployee(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   authorize(user.staffRole);
   const data = employeeSchema.parse(Object.fromEntries(formData));
 
@@ -92,7 +92,7 @@ export type PayrollRunActionState = { error?: string };
 export async function createPayrollRun(_state: PayrollRunActionState, formData: FormData): Promise<PayrollRunActionState> {
   let run;
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     const raw = {
       reference: formData.get("reference"),
       autoReference: formData.get("autoReference"),
@@ -128,7 +128,7 @@ export async function createPayrollRun(_state: PayrollRunActionState, formData: 
 }
 
 async function actor() {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   return { tenantId: active.id, userId: user.id, firmId: user.firmId, role: user.staffRole };
 }
 
@@ -148,6 +148,6 @@ export async function postRun(formData: FormData) {
   redirect(withTransactionNotice(`/payroll/runs/${id}`, "payroll-run"));
 }
 
-export async function lockPayrollRun(formData:FormData){const{user,active}=await requireActiveTenant();authorize(user.staffRole);const id=z.string().min(1).parse(formData.get("runId")),confirmation=z.literal("LOCK").parse(formData.get("confirmation"));await db.$transaction(async tx=>{const run=await tx.payrollRun.findFirst({where:{id,tenantId:active.id}});if(!run)throw new Error("Payroll run not found.");if(run.status!=="POSTED"||!run.journalId)throw new Error("Only a posted payroll run can be locked.");await tx.payrollRun.update({where:{id},data:{status:"LOCKED",lockedAt:new Date()}});await tx.auditEvent.create({data:{firmId:user.firmId,tenantId:active.id,actorId:user.id,actorKind:"STAFF",action:"PAYROLL_RUN_LOCKED",entityType:"PayrollRun",entityId:id,previousValues:{status:run.status},newValues:{status:"LOCKED",confirmation}}})});revalidatePath(`/payroll/runs/${id}`);revalidatePath("/payroll")}
+export async function lockPayrollRun(formData:FormData){const{user,active}=await requireActiveTenantForMutation();authorize(user.staffRole);const id=z.string().min(1).parse(formData.get("runId")),confirmation=z.literal("LOCK").parse(formData.get("confirmation"));await db.$transaction(async tx=>{const run=await tx.payrollRun.findFirst({where:{id,tenantId:active.id}});if(!run)throw new Error("Payroll run not found.");if(run.status!=="POSTED"||!run.journalId)throw new Error("Only a posted payroll run can be locked.");await tx.payrollRun.update({where:{id},data:{status:"LOCKED",lockedAt:new Date()}});await tx.auditEvent.create({data:{firmId:user.firmId,tenantId:active.id,actorId:user.id,actorKind:"STAFF",action:"PAYROLL_RUN_LOCKED",entityType:"PayrollRun",entityId:id,previousValues:{status:run.status},newValues:{status:"LOCKED",confirmation}}})});revalidatePath(`/payroll/runs/${id}`);revalidatePath("/payroll")}
 
-export async function updatePayrollRun(formData:FormData){const{user,active}=await requireActiveTenant();authorize(user.staffRole);const input=z.object({id:z.string().min(1),reference:z.string().trim().min(1).max(40),reason:z.string().trim().min(5).max(240)}).parse(Object.fromEntries(formData));await db.$transaction(async tx=>{const run=await tx.payrollRun.findFirst({where:{id:input.id,tenantId:active.id}});if(!run)throw new Error("Payroll run not found.");if(run.status==="LOCKED"||run.lockedAt)throw new Error("A locked payroll run cannot be updated.");await tx.payrollRun.update({where:{id:run.id},data:{reference:input.reference}});if(run.journalId)await tx.journal.update({where:{id:run.journalId},data:{reference:input.reference}});await tx.auditEvent.create({data:{firmId:user.firmId,tenantId:active.id,actorId:user.id,actorKind:"STAFF",action:"PAYROLL_RUN_UPDATED",entityType:"PayrollRun",entityId:run.id,previousValues:{reference:run.reference},newValues:{reference:input.reference},reason:input.reason}})});revalidatePath("/payroll");revalidatePath(`/payroll/runs/${input.id}`);revalidatePath("/journals");redirect(`/payroll/runs/${input.id}`)}
+export async function updatePayrollRun(formData:FormData){const{user,active}=await requireActiveTenantForMutation();authorize(user.staffRole);const input=z.object({id:z.string().min(1),reference:z.string().trim().min(1).max(40),reason:z.string().trim().min(5).max(240)}).parse(Object.fromEntries(formData));await db.$transaction(async tx=>{const run=await tx.payrollRun.findFirst({where:{id:input.id,tenantId:active.id}});if(!run)throw new Error("Payroll run not found.");if(run.status==="LOCKED"||run.lockedAt)throw new Error("A locked payroll run cannot be updated.");await tx.payrollRun.update({where:{id:run.id},data:{reference:input.reference}});if(run.journalId)await tx.journal.update({where:{id:run.journalId},data:{reference:input.reference}});await tx.auditEvent.create({data:{firmId:user.firmId,tenantId:active.id,actorId:user.id,actorKind:"STAFF",action:"PAYROLL_RUN_UPDATED",entityType:"PayrollRun",entityId:run.id,previousValues:{reference:run.reference},newValues:{reference:input.reference},reason:input.reason}})});revalidatePath("/payroll");revalidatePath(`/payroll/runs/${input.id}`);revalidatePath("/journals");redirect(`/payroll/runs/${input.id}`)}

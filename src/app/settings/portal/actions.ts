@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { withTransactionNotice } from "@/lib/transaction-notice";
 
 const portalSettingsSchema = z.object({
@@ -17,7 +17,7 @@ const portalSettingsSchema = z.object({
 });
 
 export async function updatePortalSettings(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) {
     throw new Error("Your role cannot change client portal settings.");
   }
@@ -63,7 +63,7 @@ const clientUserSchema = z.object({
 
 export async function createClientUser(_state: ClientUserState, formData: FormData): Promise<ClientUserState> {
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot add client users.");
     const input = clientUserSchema.parse(Object.fromEntries(formData));
     const duplicate = await db.user.count({ where: { firmId: user.firmId, email: { equals: input.email, mode: "insensitive" } } });
@@ -82,7 +82,7 @@ export async function createClientUser(_state: ClientUserState, formData: FormDa
 }
 
 export async function updateClientUser(userId: string, formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot update client users.");
   const clientRole = z.enum(["CLIENT_ADMIN", "CLIENT_DIRECTOR", "CLIENT_FINANCE_VIEWER", "CLIENT_PAYROLL_VIEWER", "CLIENT_DOCUMENT_CONTRIBUTOR"]).parse(formData.get("clientRole"));
   const isActive = formData.get("isActive") === "on";
@@ -103,7 +103,7 @@ const clientPasswordSchema = z.object({
 
 export async function resetClientUserPassword(userId: string, _state: ClientUserState, formData: FormData): Promise<ClientUserState> {
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) {
       throw new Error("Your role cannot reset client passwords.");
     }

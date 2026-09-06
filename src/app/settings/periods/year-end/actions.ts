@@ -5,13 +5,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { buildYearEndClosingLines, financialYearStart, type ClosingBalanceRow } from "@/lib/year-end-close";
 
 const zero = new Prisma.Decimal(0);
 
 export async function postYearEndClose(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot post a year-end close.");
   const input = z.object({ periodId: z.string().min(1), confirmation: z.string().trim().min(1).max(40) }).parse(Object.fromEntries(formData));
 

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 function authorize(role: string | null) {
   if (!role || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(role)) {
@@ -49,7 +49,7 @@ async function activityCount(periodId: string) {
 }
 
 export async function createPeriod(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   authorize(user.staffRole);
   const input = periodSchema.parse(Object.fromEntries(formData));
   await assertNoOverlap(active.id, input.startsOn, input.endsOn);
@@ -61,7 +61,7 @@ export async function createPeriod(formData: FormData) {
 }
 
 export async function updatePeriod(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   authorize(user.staffRole);
   const id = z.string().min(1).parse(formData.get("periodId"));
   const input = periodSchema.parse(Object.fromEntries(formData));
@@ -81,7 +81,7 @@ export async function updatePeriod(formData: FormData) {
 }
 
 export async function changePeriodStatus(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   authorize(user.staffRole);
   const id = z.string().min(1).parse(formData.get("periodId"));
   const target = z.enum(["OPEN", "CLOSED", "LOCKED"]).parse(formData.get("target"));

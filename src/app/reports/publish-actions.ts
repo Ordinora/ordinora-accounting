@@ -4,11 +4,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { buildReportSnapshot } from "@/lib/report-snapshot";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 const schema = z.object({ type: z.enum(["trial-balance", "profit-loss", "income-statement", "revenue-statement", "balance-sheet", "receivables", "payables", "inventory"]), from: z.coerce.date(), asOf: z.coerce.date() });
 export async function publishReport(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot publish reports.");
   const input = schema.parse(Object.fromEntries(formData));
   const period = await db.accountingPeriod.findFirst({ where: { tenantId: active.id, startsOn: { lte: input.asOf }, endsOn: { gte: input.asOf } } });

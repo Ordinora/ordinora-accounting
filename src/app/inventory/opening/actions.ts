@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { resolveReference } from "@/lib/reference-numbers";
 import { withTransactionNotice } from "@/lib/transaction-notice";
 import { receiveInventory } from "@/lib/inventory-ledger";
@@ -20,7 +20,7 @@ const header = z.object({
 });
 
 export async function postOpeningInventory(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot post opening inventory.");
 
   const input = header.parse(Object.fromEntries(formData));

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { parseMoneyToMinor } from "@/lib/accounting";
 import { db } from "@/lib/db";
 import { openingControlBalance } from "@/lib/opening-control";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 export type OpeningDocumentState = { error?: string };
 const schema = z.object({ kind: z.enum(["RECEIVABLE", "PAYABLE"]), partyId: z.string().min(1), reference: z.string().trim().min(1).max(60), documentDate: z.coerce.date(), dueDate: z.coerce.date(), amount: z.string().min(1), description: z.string().trim().max(500) });
@@ -15,7 +15,7 @@ const schema = z.object({ kind: z.enum(["RECEIVABLE", "PAYABLE"]), partyId: z.st
 export async function createOpeningDocument(_state: OpeningDocumentState, formData: FormData): Promise<OpeningDocumentState> {
   let submittedReference = "";
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot enter opening documents.");
     const input = schema.parse(Object.fromEntries(formData)); submittedReference = input.reference;
     if (input.dueDate < input.documentDate) throw new Error("Due date cannot be before the document date.");
@@ -45,7 +45,7 @@ export async function createOpeningDocument(_state: OpeningDocumentState, formDa
 }
 
 export async function deleteOpeningDocument(formData: FormData) {
-  const { user, active } = await requireActiveTenant();
+  const { user, active } = await requireActiveTenantForMutation();
   if (!user.staffRole || !["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT"].includes(user.staffRole)) throw new Error("Your role cannot delete opening documents.");
   const kind = z.enum(["RECEIVABLE", "PAYABLE"]).parse(formData.get("kind")), id = z.string().min(1).parse(formData.get("id"));
   await db.$transaction(async (tx) => {

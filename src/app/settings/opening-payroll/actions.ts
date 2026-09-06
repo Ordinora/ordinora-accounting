@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { assertOpeningPayrollRole, openingPayrollFields, prepareOpeningPayrollYtd } from "@/lib/opening-payroll";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 export type OpeningPayrollState = { error?: string };
 const amountField = z.string().trim().default("0");
@@ -27,7 +27,7 @@ const decimal = (minor: bigint) => new Prisma.Decimal(minor.toString()).div(100)
 
 export async function createOpeningPayrollYtd(_state: OpeningPayrollState, formData: FormData): Promise<OpeningPayrollState> {
   try {
-    const { user, active } = await requireActiveTenant();
+    const { user, active } = await requireActiveTenantForMutation();
     assertOpeningPayrollRole(user.staffRole);
     const input = schema.parse(Object.fromEntries(formData));
     await db.$transaction(async (tx) => {

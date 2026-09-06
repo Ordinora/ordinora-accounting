@@ -9,7 +9,7 @@ import { convertForeignToBase } from "@/lib/currency";
 import { db } from "@/lib/db";
 import { resolveReference } from "@/lib/reference-numbers";
 import { calculateQuotationLines, assertQuotationTransition } from "@/lib/sales-quotation";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 import { withTransactionNotice } from "@/lib/transaction-notice";
 
 const header = z.object({
@@ -34,7 +34,7 @@ function formLines(formData: FormData) {
 }
 
 export async function createSalesQuotation(formData: FormData) {
-  const { user, active } = await requireActiveTenant(); authorize(user.staffRole);
+  const { user, active } = await requireActiveTenantForMutation(); authorize(user.staffRole);
   const input = header.parse(Object.fromEntries(formData));
   if (input.validUntil < input.quoteDate) throw new Error("Valid-until date cannot be before the quotation date.");
   const reference = await resolveReference({ tenantId: active.id, kind: "SALES_QUOTATION", date: input.quoteDate, supplied: input.reference, auto: input.autoReference === "true" });
@@ -63,7 +63,7 @@ export async function createSalesQuotation(formData: FormData) {
 }
 
 export async function changeSalesQuotationStatus(formData: FormData) {
-  const { user, active } = await requireActiveTenant(); authorize(user.staffRole);
+  const { user, active } = await requireActiveTenantForMutation(); authorize(user.staffRole);
   const id = z.string().cuid().parse(formData.get("id")); const status = z.nativeEnum(SalesQuotationStatus).parse(formData.get("status"));
   const quotation = await db.salesQuotation.findFirst({ where: { id, tenantId: active.id } }); if (!quotation) throw new Error("Sales quotation not found.");
   if (status === "ACCEPTED" && quotation.validUntil < new Date()) throw new Error("This quotation has expired and cannot be accepted.");
@@ -75,7 +75,7 @@ export async function changeSalesQuotationStatus(formData: FormData) {
 }
 
 export async function convertSalesQuotation(formData: FormData) {
-  const { user, active } = await requireActiveTenant(); authorize(user.staffRole);
+  const { user, active } = await requireActiveTenantForMutation(); authorize(user.staffRole);
   const id = z.string().cuid().parse(formData.get("id")); const invoiceDate = z.coerce.date().parse(formData.get("invoiceDate")); const dueDate = z.coerce.date().parse(formData.get("dueDate"));
   if (dueDate < invoiceDate) throw new Error("Invoice due date cannot be before the invoice date.");
   const claimed = await db.salesQuotation.updateMany({ where: { id, tenantId: active.id, status: "ACCEPTED", convertedInvoice: null }, data: { status: "CONVERTED", convertedAt: new Date() } });
@@ -96,7 +96,7 @@ export async function convertSalesQuotation(formData: FormData) {
 }
 
 export async function deleteSalesQuotation(formData: FormData) {
-  const { user, active } = await requireActiveTenant(); authorize(user.staffRole);
+  const { user, active } = await requireActiveTenantForMutation(); authorize(user.staffRole);
   const input = z.object({ id: z.string().cuid(), reason: z.string().trim().min(5).max(240) }).parse(Object.fromEntries(formData));
   const quotation = await db.salesQuotation.findFirst({ where: { id: input.id, tenantId: active.id, status: { in: ["DRAFT", "CANCELLED"] } } });
   if (!quotation) throw new Error("Only draft or cancelled quotations can be deleted.");

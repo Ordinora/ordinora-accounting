@@ -3,6 +3,12 @@ import { Prisma } from "@prisma/client";
 const zero = new Prisma.Decimal(0);
 export type ReconciliationMovement = { id: string; debit: Prisma.Decimal.Value; credit: Prisma.Decimal.Value };
 
+export function parseStatementBalance(input: string) {
+  const normalized = input.trim().replaceAll(",", "");
+  if (!/^-?\d+(\.\d{1,2})?$/.test(normalized)) throw new Error("Enter a valid statement balance with no more than two decimal places.");
+  return new Prisma.Decimal(normalized);
+}
+
 export function calculateReconciliation(input: {
   openingBalance: Prisma.Decimal.Value;
   statementClosingBalance: Prisma.Decimal.Value;

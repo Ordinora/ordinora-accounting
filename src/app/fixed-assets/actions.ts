@@ -3,11 +3,11 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireActiveTenant } from "@/lib/session";
+import { requireActiveTenantForMutation } from "@/lib/session";
 
 export type FixedAssetSource = { type: "SUPPLIER_BILL_LINE" | "PAYMENT_LINE"; lineId: string; reference: string } | null;
 const roles = ["SYSTEM_ADMIN", "FIRM_ADMIN", "ACCOUNTANT", "REVIEWER"];
-async function context() { const value = await requireActiveTenant(); if (!value.user.staffRole || !roles.includes(value.user.staffRole)) throw new Error("Your role cannot manage fixed assets."); return value; }
+async function context() { const value = await requireActiveTenantForMutation(); if (!value.user.staffRole || !roles.includes(value.user.staffRole)) throw new Error("Your role cannot manage fixed assets."); return value; }
 
 const optional = z.preprocess((value) => value === "" ? undefined : value, z.string().trim().max(120).optional());
 const schema = z.object({
