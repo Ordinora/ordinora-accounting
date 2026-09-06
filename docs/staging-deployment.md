@@ -10,27 +10,27 @@ Staging must use fictional or anonymised data. It is a production-shaped accepta
 4. A reachable ClamAV service (or an equivalently reviewed malware-scanning adapter).
 5. A secret manager, central JSON log collection, alert routing, and encrypted off-host backups.
 
-## Oracle Cloud Always Free pilot profile
+## Spaceship VPS pilot profile
 
-For the fictional-data staging pilot, use one Always Free-eligible Ampere A1 VM in the tenancy home region with 2 OCPUs and 12 GB memory when capacity is available. Oracle currently documents 1,500 A1 OCPU-hours and 9,000 GB-hours monthly, equivalent to that allocation, plus 200 GB total Always Free block volume and limited Object Storage. Always confirm that every resource is labelled **Always Free eligible** before creating it; resources outside the home region or limits may be billed, and idle instances can be reclaimed.
+The current pilot runs on a Spaceship Ubuntu VPS. Spaceship SSH uses TCP 22022; TCP 80/443 are public. PostgreSQL port 5432, ClamAV port 3310, and application port 3000 must not be exposed publicly.
 
-Use Ubuntu 24.04 or Oracle Linux, attach a durable block volume, and mount it for Docker volumes. Open inbound TCP 22 only from the administrator's IP and TCP 80/443 publicly. Do not expose PostgreSQL port 5432, ClamAV port 3310, or application port 3000 through the OCI network security group.
-
-The supplied `docker-compose.oracle-staging.yml` runs Caddy, Ordinora, PostgreSQL, and an isolated ClamAV daemon. It deliberately allows private local block storage only when both `DEPLOYMENT_ENV=staging` and `ALLOW_STAGING_LOCAL_STORAGE=true`. This exception is for anonymised pilot data; the production profile still requires reviewed private object storage and off-host backup.
+The supplied `docker-compose.oracle-staging.yml` retains its historical filename for deployment compatibility. It runs Caddy, Ordinora, PostgreSQL 18, and an isolated ClamAV daemon. PostgreSQL data is bind-mounted from `/srv/ordinora/postgres`, and private documents are bind-mounted from `/srv/ordinora/documents`. Both directories must be included in backup and restore procedures. Local document storage is allowed only when both `DEPLOYMENT_ENV=staging` and `ALLOW_STAGING_LOCAL_STORAGE=true` are set. This exception is for the pilot; a production review must assess encrypted off-host object storage and backups.
 
 ### VM deployment sequence
 
 1. Point a staging DNS record such as `accounts-staging.example.com` to the VM public IP. Do not reuse the main website hostname.
 2. Install Docker Engine with the Compose plugin and enable its service.
-3. Copy the repository to `/opt/ordinora`, copy `.env.oracle-staging.example` to `.env.oracle-staging`, and replace every placeholder. Restrict the file to the deployment administrator.
+3. Copy the repository to `/opt/ordinora/app`, copy `.env.oracle-staging.example` to `.env.oracle-staging`, and replace every placeholder. Keep Compose interpolation values in the root `.env`. Restrict both populated files to the deployment administrator and never commit them.
 4. Generate secrets independently. The Server Actions key is `openssl rand -base64 32`; the other secrets can be generated with `openssl rand -hex 32`.
-5. Build the immutable image: `docker build -t ordinora:staging .`.
-6. Validate the rendered stack: `docker compose --env-file .env.oracle-staging -f docker-compose.oracle-staging.yml config --quiet`.
-7. Start only the database and scanner: `docker compose --env-file .env.oracle-staging -f docker-compose.oracle-staging.yml up -d db clamav`, and wait for both health checks.
-8. Apply migrations once: `docker compose --env-file .env.oracle-staging -f docker-compose.oracle-staging.yml run --rm app npx prisma migrate deploy`.
-9. Start the application and proxy: `docker compose --env-file .env.oracle-staging -f docker-compose.oracle-staging.yml up -d app proxy`.
-10. Verify `https://<staging-domain>/api/health/live`, then call the protected readiness endpoint with `X-Health-Token` from the VM.
-11. Load fictional acceptance data only, run the browser suite through the HTTPS hostname, and record the release image tag, migration list, health evidence, and test results.
+5. Create `/srv/ordinora/postgres`, `/srv/ordinora/documents`, and `/srv/ordinora/backups` with ownership and permissions appropriate for their containers and the deployment administrator.
+6. Build the immutable application image: `docker build --pull -t ordinora:production .`.
+7. Validate the rendered stack: `docker compose --env-file .env -f docker-compose.oracle-staging.yml config --quiet`.
+8. Start only the database and scanner: `docker compose --env-file .env -f docker-compose.oracle-staging.yml up -d db clamav`, and wait for both health checks.
+9. Build the migration image: `docker build --target builder -t ordinora-migrator:production .`.
+10. Apply migrations once through the private Compose network: `docker run --rm --network app_default --env-file .env ordinora-migrator:production sh -c 'export DATABASE_URL="postgresql://ordinora_app:${POSTGRES_APP_PASSWORD}@db:5432/ordinora_staging?schema=public"; export DIRECT_URL="$DATABASE_URL"; npm run db:migrate:deploy'`.
+11. Start the application and proxy: `docker compose --env-file .env -f docker-compose.oracle-staging.yml up -d --wait app proxy`.
+12. Verify `https://<staging-domain>/api/health/live`, then call the protected readiness endpoint with `X-Health-Token` from the VPS.
+13. Load fictional acceptance data only, run the browser suite through the HTTPS hostname, and record the release image tag, migration list, health evidence, and test results.
 
 ## Release sequence
 

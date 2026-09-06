@@ -26,7 +26,7 @@ services:
       CLAMAV_PORT: "3310"
       DOCUMENT_STORAGE_ROOT: /var/lib/ordinora/documents
     volumes:
-      - ordinora_documents:/var/lib/ordinora/documents
+      - /srv/ordinora/documents:/var/lib/ordinora/documents
     expose:
       - "3000"
     healthcheck:
@@ -41,14 +41,14 @@ services:
         condition: service_healthy
 
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ordinora_app
       POSTGRES_PASSWORD: ${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD}
       POSTGRES_DB: ordinora_staging
     volumes:
-      - ordinora_postgres:/var/lib/postgresql/data
+      - /srv/ordinora/postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ordinora_app -d ordinora_staging"]
       interval: 10s
