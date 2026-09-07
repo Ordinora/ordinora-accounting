@@ -39,6 +39,12 @@ export function currentFinancialYearStart(settings: FinancialYearSettings, asOf 
   return start;
 }
 
+export function currentFinancialYearEnd(settings: FinancialYearSettings, asOf = new Date()) {
+  const asOfDay = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()));
+  const endThisYear = financialYearEndDate(asOfDay.getUTCFullYear(), settings);
+  return asOfDay <= endThisYear ? endThisYear : financialYearEndDate(asOfDay.getUTCFullYear() + 1, settings);
+}
+
 function parsedDate(value: string | undefined, endOfDay: boolean) {
   if (!value || !datePattern.test(value)) return null;
   const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
