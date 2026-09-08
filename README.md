@@ -1,6 +1,8 @@
 # Ordinora Accounting
 
-Production-oriented, multi-client accounting software for a Brunei accounting firm. The current build includes the internal accounting, multicurrency and inventory foundations, plus the first **Payroll/SPK foundation**. It is not yet suitable for real financial data.
+Production-oriented, multi-client accounting software for a Brunei accounting firm. The application includes internal accounting, commercial documents, banking, inventory, fixed assets, payroll/SPK, tax working papers, reporting, notifications, and a controlled client portal.
+
+Start with [`docs/developer-handover.md`](docs/developer-handover.md) before maintaining, extending, or deploying the application. It records the current architecture, security and accounting invariants, configuration, test workflow, VPS release process, backup/rollback controls, and a reusable handover prompt for Codex or another coding assistant.
 
 ## Local setup
 
@@ -26,12 +28,12 @@ Use `npm run config:check` to validate fail-closed production settings and `npm 
 
 ## Current scope
 
-Implemented: staff dashboard UI, tenant/staff/client role model, chart-of-accounts and journal schema, immutable audit schema, period locks, report publication/version model, document/question foundations, exact minor-unit accounting helpers, balanced-entry validation, locked-period checks, posted-entry immutability rules, and tenant-access guards.
+Implemented areas include tenant/staff/client access, company-specific financial years, chart of accounts, journals, audit, period controls, financial reports, sales and purchases, receipts and payments, banking and reconciliation, inventory, fixed assets, payroll/SPK, tax working papers, notifications, published client reports, questions, and quarantined document upload.
 
-Current payroll scope: tenant-isolated employee records, configurable effective-dated SPK bands, restricted pay-run preparation, employee-level gross/net calculations, approval, and balanced payroll-journal posting with period-lock enforcement. Payslips, final-pay processing, payroll-run locking and payment settlement remain planned. Portal access defaults to published-only and payroll access defaults off.
+Portal access defaults to off, published-only reporting is the default when enabled, payroll visibility is independently controlled, and document upload requires both a deployment-wide switch and a per-company switch.
 
 ## Important limitations
 
-This is development software, not a legal filing or production accounting system. Demonstration SPK and tax parameters must be verified by a Brunei-qualified accountant before use. MFA is implemented but still requires production key management and acceptance testing; object storage, malware scanning, email delivery, production backups, and operational monitoring remain deployment work.
+This software must not be treated as professional accounting, payroll, tax, or legal advice. SPK, tax, capital-allowance, filing, and financial-statement behaviour must be verified by a Brunei-qualified professional. The current VPS uses ClamAV and durable local document storage under a staging exception; fully reviewed production object storage, off-host backups, centralized monitoring, and secret management remain operational work.
 
 See `docs/` for the requirements, accounting rules, data model, security model, client portal policy, and implementation plan.
