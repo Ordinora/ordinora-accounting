@@ -269,6 +269,18 @@ Recent milestones visible in Git at the time of this handover include company-sp
 
 Use small descriptive commits. For risky changes, use a review branch beginning with `codex/` and merge after verification. Do not force-push `main`. Because the repository currently has no automated GitHub Actions, a successful push alone does not prove the build or tests passed.
 
+### Displayed application version
+
+The staff sidebar displays `ORDINORA ACCOUNTING` and reads its version from the root `package.json`. Increment the version once for every application release that is intended for deployment, and commit the matching `package.json` and `package-lock.json` changes with that release. Use a patch increment for ordinary fixes, a minor increment for a meaningful backward-compatible feature, and reserve a major increment for an intentionally incompatible release. Documentation-only commits do not require a version change.
+
+For an ordinary release, update both package files without creating an automatic Git tag:
+
+```powershell
+npm version patch --no-git-tag-version
+```
+
+The displayed version confirms which packaged release the browser loaded. The Git commit hash remains the more precise source for operational diagnosis.
+
 ## 13. VPS deployment
 
 The checked-out application lives at `/opt/ordinora/app`. The active Compose file is `docker-compose.oracle-staging.yml`; its historical name does not mean it can be casually renamed. Current services are application, PostgreSQL 18, ClamAV, and Caddy.

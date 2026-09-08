@@ -12,6 +12,7 @@ import { OrdinoraEmblem } from "@/components/ordinora-emblem";
 import { NotificationBell } from "@/components/notification-bell";
 import { navigationModulesForRole, type NavigationModule } from "@/lib/navigation-modules";
 import { TransactionNotification } from "@/components/transaction-notification";
+import packageJson from "../../package.json";
 
 type TenantOption = { id: string; legalName: string; status: "ACTIVE" | "DORMANT" };
 type ShellUser = { displayName: string; email: string; role: string; firmName: string };
@@ -92,7 +93,7 @@ export function AppShell({
           })}
         </nav>
 
-        <div className="environment-label"><span className="environment-dot" />LOCAL DEVELOPMENT<small>Version 0.1.0</small></div>
+        <div className="environment-label"><span className="environment-dot" />ORDINORA ACCOUNTING<small>Version {packageJson.version}</small></div>
       </aside>
 
       <section className="omps-workspace">
