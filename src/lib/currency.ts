@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { currencyDisplaySymbol } from "./currency-display";
 
 export function normalizeCurrencyCode(value: string) {
   const code = value.trim().toUpperCase();
@@ -35,5 +36,6 @@ export function formatCurrencyAmount(currency: string, value: unknown) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return numeric < 0 ? `${currency} (${formatted})` : `${currency} ${formatted}`;
+  const symbol = currencyDisplaySymbol(currency);
+  return numeric < 0 ? `${symbol} (${formatted})` : `${symbol} ${formatted}`;
 }

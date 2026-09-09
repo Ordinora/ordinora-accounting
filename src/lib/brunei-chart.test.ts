@@ -15,6 +15,21 @@ describe("default Brunei chart of accounts", () => {
     expect(new Set(codes).size).toBe(codes.length);
   });
 
+  it("keeps salary indirect and wages direct", () => {
+    const accounts = new Map(bruneiChart.map(([code, name, type, classification]) => [code, { name, type, classification }]));
+
+    expect(accounts.get("6000")).toEqual({
+      name: "Salary",
+      type: "EXPENSE",
+      classification: "Indirect Expenses",
+    });
+    expect(accounts.get("5100")).toEqual({
+      name: "Wages",
+      type: "EXPENSE",
+      classification: "Direct Expenses",
+    });
+  });
+
   it("marks system-managed subledger accounts as controls", () => {
     const controls = new Map(bruneiChart.map(([code, , , , isControlAccount]) => [code, Boolean(isControlAccount)]));
     expect(controls.get("1200")).toBe(true);

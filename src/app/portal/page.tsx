@@ -4,6 +4,7 @@ import { PortalFinancialCharts } from "@/components/financial-charts";
 import { getBalanceTrendForRange, summarizeAging } from "@/lib/balance-trend";
 import { calculateDashboardBalances } from "@/lib/dashboard-calculations";
 import { dashboardDateRange } from "@/lib/dashboard-date-range";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { db } from "@/lib/db";
 import { agedReceivables } from "@/lib/reports";
 import { canClientViewFinancials, requireClient } from "@/lib/session";
@@ -16,7 +17,7 @@ async function LivePostingTimestamp({ tenantId }: { tenantId: string }) {
   return <p className="portal-freshness">Last posted update: {latest?.updatedAt.toLocaleString("en-BN") ?? "No posted entries"}</p>;
 }
 
-const money = (currency: string, value: number) => `${currency} ${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (currency: string, value: number) => `${currencyDisplaySymbol(currency)} ${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function ClientPortalPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const user = await requireClient();

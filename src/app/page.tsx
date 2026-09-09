@@ -11,13 +11,13 @@ import { currentFinancialYearEnd } from "@/lib/financial-year";
 import { requireTradeControlAccounts } from "@/lib/control-accounts";
 import { customerSummary } from "@/lib/customer-reports";
 import { db } from "@/lib/db";
+import { formatCurrencyAmount } from "@/lib/currency";
 import { journalDescriptionLabel } from "@/lib/journal-labels";
 import { agedPayables, agedReceivables } from "@/lib/reports";
 import { getAuthorizedTenant, requireStaff } from "@/lib/session";
 import { logout } from "./actions";
 
 export const dynamic = "force-dynamic";
-const money = (value: number) => `B$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const user = await requireStaff(); const { tenants, active } = await getAuthorizedTenant(user);
@@ -44,6 +44,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ f
   const activityBalances = calculateDashboardBalances(activityLines);
   const aging = summarizeAging(receivableRows, payableRows);
   const topCustomers = customerRows.filter((row) => row.outstanding.gt(0)).sort((left, right) => right.outstanding.comparedTo(left.outstanding)).slice(0, 5).map((row) => ({ name: row.name, outstanding: Number(row.outstanding) }));
+  const money = (value: number) => formatCurrencyAmount(active.defaultCurrency, value);
   const kpis=[{label:"Cash & bank balance",value:money(positionBalances.cashAndBank),hint:`Posted balance as of ${range.toInput}`,Icon:Landmark},{label:"Accounts receivable",value:money(positionBalances.receivables),hint:`Outstanding as of ${range.toInput}`,Icon:WalletCards},{label:"Accounts payable",value:money(positionBalances.payables),hint:`Outstanding as of ${range.toInput}`,Icon:ReceiptText},{label:"Net profit",value:money(activityBalances.netProfit),hint:`Accrual basis · ${range.fromInput} to ${range.toInput}`,Icon:CircleDollarSign}];
   return <AppShell user={{displayName:user.displayName,email:user.email,role:user.staffRole?.replaceAll("_"," ")??"STAFF",firmName:user.firm.name}} tenants={tenants} activeTenant={active} pageTitle="Dashboard" pageDescription={`Financial overview for ${active.legalName}`}>
     <div className="dashboard-intro"><div><p className="eyebrow">{new Date().toLocaleDateString("en-BN",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}</p><h2>Good morning, {user.displayName.split(" ")[0]}</h2><p>Review the selected posted financial period and continue today’s accounting work.</p></div><div className="dashboard-controls"><div className="period-status"><span/><div><small>ACCOUNTING PERIOD</small><strong>{selectedPeriod ? `${selectedPeriod.name} · ${selectedPeriod.status}` : "No period for selected date"}</strong></div></div><div className="period-status financial-year-end-status"><span/><div><small>FINANCIAL YEAR END</small><strong>{financialYearEndLabel}</strong></div></div></div></div>

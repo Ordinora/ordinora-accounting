@@ -3,13 +3,14 @@ import { AlertTriangle,ArrowRight,CheckCircle2,Download } from "lucide-react";
 import { Prisma } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { fixedAssetReportRows } from "@/lib/fixed-asset-reports";
 import { ledgerBalances } from "@/lib/reports";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic="force-dynamic";
 const zero=new Prisma.Decimal(0);
-const money=(currency:string,value:Prisma.Decimal|number)=>`${currency} ${Number(value).toLocaleString("en-BN",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+const money=(currency:string,value:Prisma.Decimal|number)=>`${currencyDisplaySymbol(currency)} ${Number(value).toLocaleString("en-BN",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
 export default async function Page({searchParams}:{searchParams:Promise<{asOf?:string}>}){
   const query=await searchParams,{user,tenants,active}=await requireActiveTenant();

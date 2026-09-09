@@ -4,13 +4,14 @@ import { Pencil } from "lucide-react";
 import { Prisma } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 const zero = new Prisma.Decimal(0);
 const parseDate = (value?: string) => { const parsed = value ? new Date(`${value}T23:59:59.999Z`) : new Date(); return Number.isNaN(parsed.getTime()) ? new Date() : parsed; };
 const quantity = (value: Prisma.Decimal) => Number(value).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 4 });
-const money = (currency: string, value: Prisma.Decimal, decimals = 2) => `${currency} ${Number(value).toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+const money = (currency: string, value: Prisma.Decimal, decimals = 2) => `${currencyDisplaySymbol(currency)} ${Number(value).toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
 
 export default async function Page({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ asOf?: string }> }) {
   const { id } = await params, query = await searchParams, { user, tenants, active } = await requireActiveTenant(), asOf = parseDate(query.asOf);

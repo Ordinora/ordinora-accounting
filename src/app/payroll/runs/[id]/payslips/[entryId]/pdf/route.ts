@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { generateReportPdf } from "@/lib/report-pdf";
 import { requireActiveTenant } from "@/lib/session";
 
@@ -23,7 +24,7 @@ export async function GET(
   if (!entry) return new Response("Payslip not found", { status: 404 });
 
   const amount = (value: Prisma.Decimal.Value) =>
-    `${active.defaultCurrency} ${Number(value).toLocaleString("en-BN", {
+    `${currencyDisplaySymbol(active.defaultCurrency)} ${Number(value).toLocaleString("en-BN", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;

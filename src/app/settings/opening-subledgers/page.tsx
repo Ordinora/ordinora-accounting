@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { OpeningDocumentForm } from "@/components/opening-document-form";
 import { db } from "@/lib/db";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { openingControlBalance } from "@/lib/opening-control";
 import { openingControlPosition } from "@/lib/opening-subledgers";
 import { requireActiveTenant } from "@/lib/session";
@@ -10,7 +11,7 @@ import { deleteOpeningDocument } from "./actions";
 
 export const dynamic = "force-dynamic";
 const zero = new Prisma.Decimal(0);
-const money = (code: string, value: Prisma.Decimal) => `${code} ${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (code: string, value: Prisma.Decimal) => `${currencyDisplaySymbol(code)} ${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function Page() {
   const { user, tenants, active } = await requireActiveTenant();

@@ -3,10 +3,11 @@ import { Calculator, Plus, ShieldCheck, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { SourceRecordActions } from "@/components/source-record-actions";
 import { db } from "@/lib/db";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
-const money = (currency: string, value: unknown) => `${currency} ${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (currency: string, value: unknown) => `${currencyDisplaySymbol(currency)} ${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function Page() {
   const { user, tenants, active } = await requireActiveTenant();

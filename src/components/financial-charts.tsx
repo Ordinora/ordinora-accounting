@@ -3,11 +3,12 @@
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useSyncExternalStore } from "react";
 import type { AgingChartPoint, BalanceTrendPoint } from "@/lib/balance-trend";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 
 type CustomerPoint = { name: string; outstanding: number };
 const palette = { emerald: "#0a4939", copper: "#c67b36", sage: "#4f8b75", sand: "#d9a85e", red: "#b94b43" };
 const compact = (value: number) => new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
-const amount = (currency: string, value: number) => `${currency} ${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+const amount = (currency: string, value: number) => `${currencyDisplaySymbol(currency)} ${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 const hasValues = (values: number[]) => values.some((value) => Math.abs(value) > 0.0001);
 const subscribe = () => () => undefined;
 const useChartReady = () => useSyncExternalStore(subscribe, () => true, () => false);

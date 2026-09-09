@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { calculateFixedAssetBookValue } from "@/lib/fixed-assets";
 import { requireActiveTenant } from "@/lib/session";
 import { postDepreciationRun } from "./actions";
 
 export const dynamic = "force-dynamic";
-const money = (currency: string, amount: number) => `${currency} ${amount.toLocaleString("en-BN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (currency: string, amount: number) => `${currencyDisplaySymbol(currency)} ${amount.toLocaleString("en-BN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ asOf?: string; success?: string; error?: string }> }) {
   const query = await searchParams;

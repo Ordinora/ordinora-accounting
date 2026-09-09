@@ -4,11 +4,12 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, CheckCircle2, FileSearch, Pencil, Save } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { calculateReconciliation } from "@/lib/reconciliation-calculations";
 import { requireActiveTenant } from "@/lib/session";
 import { updateReconciliation } from "../actions";
 
-const money = (currency: string, value: Prisma.Decimal.Value) => `${currency} ${Number(value).toFixed(2)}`;
+const money = (currency: string, value: Prisma.Decimal.Value) => `${currencyDisplaySymbol(currency)} ${Number(value).toFixed(2)}`;
 export const dynamic = "force-dynamic";
 
 export default async function ReconciliationPage({ params }: { params: Promise<{ id: string }> }) {

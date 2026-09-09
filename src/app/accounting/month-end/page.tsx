@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, LockKeyhole, XCircle } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/lib/db";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { MONTH_END_CHECKLIST } from "@/lib/month-end-checklist";
 import { monthEndReview } from "@/lib/month-end-review";
 import { requireActiveTenant } from "@/lib/session";
@@ -11,7 +12,7 @@ const date = (value: string | undefined) => {
   const parsed = value ? new Date(`${value}T23:59:59.999Z`) : new Date();
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
-const money = (currency: string, value?: { toNumber(): number }) => value ? `${currency} ${value.toNumber().toLocaleString("en-BN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+const money = (currency: string, value?: { toNumber(): number }) => value ? `${currencyDisplaySymbol(currency)} ${value.toNumber().toLocaleString("en-BN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
 export const dynamic = "force-dynamic";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ asOf?: string }> }) {

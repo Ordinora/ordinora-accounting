@@ -4,9 +4,11 @@ import { calculateSettlementValues, convertForeignToBase, formatCurrencyAmount, 
 
 describe("currency accounting", () => {
   it("formats negative report values with parentheses", () => {
-    expect(formatCurrencyAmount("BND", new Prisma.Decimal("-6000"))).toBe("BND (6,000.00)");
-    expect(formatCurrencyAmount("BND", new Prisma.Decimal("6000"))).toBe("BND 6,000.00");
-    expect(formatCurrencyAmount("BND", 0)).toBe("BND 0.00");
+    expect(formatCurrencyAmount("BND", new Prisma.Decimal("-6000"))).toBe("B$ (6,000.00)");
+    expect(formatCurrencyAmount("BND", new Prisma.Decimal("6000"))).toBe("B$ 6,000.00");
+    expect(formatCurrencyAmount("BND", 0)).toBe("B$ 0.00");
+    expect(formatCurrencyAmount("SGD", 25)).toBe("S$ 25.00");
+    expect(formatCurrencyAmount("XYZ", 25)).toBe("XYZ 25.00");
   });
   it("normalizes ISO-style codes", () => expect(normalizeCurrencyCode(" usd ")).toBe("USD"));
   it("rejects zero and negative rates", () => {

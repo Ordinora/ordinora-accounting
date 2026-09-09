@@ -2,13 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { dashboardDateRange } from "@/lib/dashboard-date-range";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { agedPayables, agedReceivables, ledgerBalances } from "@/lib/reports";
 import { requireClientFinancialAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 const zero = new Prisma.Decimal(0);
-const money = (currency: string, value: Prisma.Decimal.Value) => `${currency} ${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (currency: string, value: Prisma.Decimal.Value) => `${currencyDisplaySymbol(currency)} ${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const names: Record<string, string> = { cash: "Cash & bank", revenue: "Revenue", receivables: "Accounts receivable", payables: "Accounts payable", profit: "Net profit" };
 
 export default async function LiveDrilldownPage({ params, searchParams }: { params: Promise<{ metric: string }>; searchParams: Promise<{ from?: string; to?: string; view?: string }> }) {

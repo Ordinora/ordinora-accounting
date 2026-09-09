@@ -3,11 +3,12 @@ import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Landmark } from "lucide-re
 import { AppShell } from "@/components/app-shell";
 import { bankingDateRange, calculateBankLedger } from "@/lib/banking-calculations";
 import { db } from "@/lib/db";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-const money = (code: string, value: { toString(): string }) => code + " " + Number(value.toString()).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (code: string, value: { toString(): string }) => currencyDisplaySymbol(code) + " " + Number(value.toString()).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default async function BankingPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const { user, tenants, active } = await requireActiveTenant();

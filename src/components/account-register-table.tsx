@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 
 type AccountRow = {
   id: string;
@@ -38,6 +39,6 @@ export function AccountRegisterTable({ accounts, canManage, currency }: {
       {filteredAccounts.map((account) => <tr key={account.id}><td><strong>{account.code}</strong></td><td>{account.name}</td><td>{account.type}</td><td>{account.reportingClassification}</td><td><span className={`status-badge ${account.isActive ? "active" : "inactive"}`}>{account.isActive ? "ACTIVE" : "INACTIVE"}</span></td>{canManage && <td><Link className="table-action" href={`/accounts/${account.id}/edit`}>Edit</Link></td>}</tr>)}
       {!filteredAccounts.length && <tr><td colSpan={canManage ? 6 : 5} className="table-empty">No accounts match the current search and account-type filter.</td></tr>}
     </tbody></table></div>
-    <footer className="table-footer"><span>{filteredAccounts.length === accounts.length ? `${accounts.length} accounts` : `${filteredAccounts.length} of ${accounts.length} accounts`}</span><span>Currency: {currency}</span></footer>
+    <footer className="table-footer"><span>{filteredAccounts.length === accounts.length ? `${accounts.length} accounts` : `${filteredAccounts.length} of ${accounts.length} accounts`}</span><span>Base currency: {currency} ({currencyDisplaySymbol(currency)})</span></footer>
   </section>;
 }

@@ -2,13 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { currencyDisplaySymbol } from "@/lib/currency-display";
 import { db } from "@/lib/db";
 import { requireActiveTenant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 const money = (currency: string, value: unknown) =>
-  `${currency} ${Number(value).toLocaleString("en-BN", {
+  `${currencyDisplaySymbol(currency)} ${Number(value).toLocaleString("en-BN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
